@@ -4,17 +4,74 @@ import Head from "next/head";
 import NavBar from "../components/NavBar";
 import Footer from "../components/Footer";
 import { useCart } from "../context/CartContext";
+import { useToast } from "@/components/Toast";
 import Link from "next/link";
 import { PlusIcon, MinusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 export default function CartPage() {
   const { cart, total, removeFromCart, addToCart } = useCart();
+  const toast = useToast();
+  const [customer, setCustomer] = React.useState({
+    name: "",
+    email: "",
+    phone: "",
+    company: "",
+    message: "",
+  });
+  const [sending, setSending] = React.useState(false);
+
+  const canSend =
+    cart.length > 0 && customer.name && customer.email && !sending;
 
   const updateQty = (item, delta) => {
     const newQty = (item.qty || 1) + delta;
     if (newQty < 1) return;
     removeFromCart(item.id);
     addToCart({ ...item, qty: newQty });
+  };
+
+  const sendQuote = async () => {
+    try {
+      setSending(true);
+      // enviamos una versión “compacta” del carrito
+      const cartToSend = cart.map((i) => ({
+        id: i.id,
+        name: i.name || i.title,
+        sku: i?.variant?.sku || i?.sku || null,
+        qty: Number(i.qty ?? 1),
+        unit_price: Number(i.price ?? i.unit_price ?? 0),
+        belowMinimum: !!i.belowMinimum,
+        pricingNote: i.pricingNote || null,
+      }));
+      const key = crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
+      const res = await fetch("/api/quotes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Idempotency-Key": key,
+        },
+        body: JSON.stringify({ customer, cart: cartToSend, total }),
+      });
+      const ct = res.headers.get("content-type") || "";
+      const data = ct.includes("application/json")
+        ? await res.json().catch(() => null)
+        : null;
+      if (!res.ok)
+        throw new Error((data && data.error) || `HTTP ${res.status}`);
+      toast.success({
+        title: "¡Cotización enviada!",
+        description: `Te escribiremos a ${customer.email} a la brevedad.`,
+      });
+      // reset del formulario
+      setCustomer({ name: "", email: "", phone: "", company: "", message: "" });
+    } catch (err) {
+      toast.error({
+        title: "No se pudo enviar",
+        description: err.message || "Intentá nuevamente en unos minutos.",
+      });
+    } finally {
+      setSending(false);
+    }
   };
 
   const faqs = [
@@ -210,7 +267,7 @@ export default function CartPage() {
                     <tbody>
                       {cart.map((item) => {
                         // obtenemos la primera imagen si existe
-                        const imgUrl = item.images?.[0]?.image_url;
+                        const imgUrl = item.images?.image_url;
                         return (
                           <tr
                             key={item.id}
@@ -309,13 +366,59 @@ export default function CartPage() {
                 ${total.toLocaleString("es-AR", { minimumFractionDigits: 2 })}
               </span>
             </div>
+            {/* Datos del cliente */}
+            <div className="mt-6 space-y-3">
+              <h3 className="font-semibold">Tus datos</h3>
+              <input
+                className="w-full border rounded p-2"
+                placeholder="Nombre y apellido *"
+                value={customer.name}
+                onChange={(e) =>
+                  setCustomer((c) => ({ ...c, name: e.target.value }))
+                }
+              />
+              <input
+                className="w-full border rounded p-2"
+                placeholder="Email *"
+                type="email"
+                value={customer.email}
+                onChange={(e) =>
+                  setCustomer((c) => ({ ...c, email: e.target.value }))
+                }
+              />
+              <input
+                className="w-full border rounded p-2"
+                placeholder="Teléfono"
+                value={customer.phone}
+                onChange={(e) =>
+                  setCustomer((c) => ({ ...c, phone: e.target.value }))
+                }
+              />
+              <input
+                className="w-full border rounded p-2"
+                placeholder="Empresa"
+                value={customer.company}
+                onChange={(e) =>
+                  setCustomer((c) => ({ ...c, company: e.target.value }))
+                }
+              />
+              <textarea
+                className="w-full border rounded p-2"
+                placeholder="Mensaje (opcional)"
+                rows={3}
+                value={customer.message}
+                onChange={(e) =>
+                  setCustomer((c) => ({ ...c, message: e.target.value }))
+                }
+              />
+            </div>
+
             <button
-              className={
-                "w-full bg-black text-white py-3 rounded disabled:opacity-50 disabled:cursor-not-allowed"
-              }
-              disabled={true}
+              onClick={sendQuote}
+              className="mt-4 w-full bg-black text-white py-3 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!canSend}
             >
-              ENVIAR COTIZACIÓN
+              {sending ? "Enviando..." : "ENVIAR COTIZACIÓN"}
             </button>
 
             {/* FAQ placeholder */}
@@ -326,9 +429,9 @@ export default function CartPage() {
                   <summary className="cursor-pointer font-medium">
                     {question}
                   </summary>
-                  <p className="mt-2 text-gray-700 font-normal text-xs">
+                  <div className="mt-2 text-gray-700 font-normal text-xs space-y-2">
                     {answer}
-                  </p>
+                  </div>
                 </details>
               ))}
             </div>
