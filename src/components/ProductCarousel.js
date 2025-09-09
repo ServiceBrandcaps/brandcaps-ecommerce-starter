@@ -30,7 +30,7 @@ export default function ProductCarousel({ productos }) {
     <div className="relative">
       <button
         onClick={() => scroll(-containerRef.current.clientWidth)}
-        className="absolute left-0 top-1/2 z-10 transform -translate-y-1/2 bg-white bg-opacity-75 p-2 rounded-full shadow hover:bg-opacity-100 focus:outline-none"
+        className="absolute left-0 top-1/2 z-10 transform -translate-y-1/2 bg-white bg-opacity-75 p-2 rounded-full shadow hover:bg-opacity-100 focus:outline-none cursor-pointer  hover:bg-gray-100"
       >
         <ChevronLeftIcon className="w-6 h-6 text-gray-700" />
       </button>
@@ -48,7 +48,7 @@ export default function ProductCarousel({ productos }) {
 
       <button
         onClick={() => scroll(containerRef.current.clientWidth)}
-        className="absolute right-0 top-1/2 z-10 transform -translate-y-1/2 bg-white bg-opacity-75 p-2 rounded-full shadow hover:bg-opacity-100 focus:outline-none"
+        className="absolute right-0 top-1/2 z-10 transform -translate-y-1/2 bg-white bg-opacity-75 p-2 rounded-full shadow hover:bg-opacity-100 focus:outline-none cursor-pointer  hover:bg-gray-100"
       >
         <ChevronRightIcon className="w-6 h-6 text-gray-700" />
       </button>

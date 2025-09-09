@@ -8,12 +8,12 @@ export default function Hero() {
         <p className="text-lg md:text-xl mb-6">
           Tu tienda online de confianza. Calidad y envío rápido a todo el país.
         </p>
-        <a
+        {/* <a
           href="#productos"
           className="inline-block bg-white text-gray-600 font-semibold py-3 px-6 rounded shadow hover:bg-gray-100 transition"
         >
           Explorar productos
-        </a>
+        </a> */}
       </div>
     </section>
   );

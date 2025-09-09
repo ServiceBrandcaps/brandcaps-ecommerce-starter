@@ -34,9 +34,8 @@ export async function getStaticProps() {
       id: it._id || it.id || String(it._id || ''),
       name: it.name,
       price: it.salePrice ?? it.price ?? 0,
-      images: it.image
-        ? [{ image_url: it.image, main: true, main_integrator: true }]
-        : (it.images || []).map(u => ({ image_url: u, main: false, main_integrator: false })),
+      images: it.images, //        ? [{ image_url: it.image, main: true, main_integrator: true }]
+        //: (it.images || []).map(u => ({ image_url: u, main: false, main_integrator: false }))
       families: it.families || [],
       products: it.products || [],
     })) : [];

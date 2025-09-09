@@ -1,29 +1,34 @@
 // components/ProductCard.js
-import React, { useState } from 'react';
-import Link from 'next/link';
-import { useCart } from '../context/CartContext';
-import { ChevronDownIcon } from '@heroicons/react/24/solid';
+import React, { useState } from "react";
+import Link from "next/link";
+import { useCart } from "../context/CartContext";
+import { ChevronDownIcon } from "@heroicons/react/24/solid";
 
 export default function ProductCard({ product: p, producto }) {
   const { addToCart } = useCart();
   const [showStock, setShowStock] = useState(false);
   //console.log(p);
   //console.log(producto);
-    // Soportar ambas props (por si la grilla aún envía "producto")
+  // Soportar ambas props (por si la grilla aún envía "producto")
   const product = p || producto;
   if (!product) return null;
   //console.log(product);
   // Normalizamos imágenes: array => ok, string "image" => [{url}], main_image_url => [{url}]
-  const images =
-    (Array.isArray(product.images) && product.images.length > 0 && product.images) ||
-    (product.image ? [{ url: product.image }] : null) ||
-    (product.main_image_url ? [{ url: product.main_image_url }] : []) ;
+   const images =
+     (Array.isArray(product.images) &&
+       product.images.length > 0 &&
+       product.images) ||
+     (product.image ? [{ url: product.image }] : null) ||
+     (product.main_image_url ? [{ url: product.main_image_url }] : []);
+
+  // console.log(images);
 
   // Elegimos la principal
-  const imgData =
-    images.find?.((i) => i.main_integrator) ||
-    images.find?.((i) => i.main) ||
-    images[0];
+  const imgData = //product?.images || product?.image;
+     images.find?.((i) => i.main_integrator) ||
+     images.find?.((i) => i.main) ||
+     images[0];
+  //console.log(imgData);
 
   const imgUrl = imgData?.url || imgData?.image_url || imgData?.src || "";
 
@@ -32,14 +37,18 @@ export default function ProductCard({ product: p, producto }) {
   const price = product.salePrice ?? product.price ?? 0;
   const families = product.families ?? [];
   const products = product.products ?? [];
-  
+
+  const moneyAR = (n) =>
+    new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      maximumFractionDigits: 2,
+    }).format(Number(Math.round(n) || 0));
+
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden relative w-[250px] h-[380px]">
       {/* Envolvemos imagen y detalles en un Link clickeable */}
-      <Link
-        href={`/product/${id}`}
-        className="block h-full"
-      >
+      <Link href={`/product/${id}`} className="block h-full">
         {/* Imagen */}
         <div className="h-48 flex items-center justify-center bg-gray-50">
           {imgUrl ? (
@@ -55,15 +64,11 @@ export default function ProductCard({ product: p, producto }) {
 
         {/* Contenido */}
         <div className="p-4 space-y-2">
-          <h3 className="text-lg font-medium text-gray-900 truncate">
-            {name}
-          </h3>
+          <h3 className="text-lg font-medium text-gray-900 truncate">{name}</h3>
           <p className="text-sm text-gray-500">
-            {families?.[0]?.title || 'Sin categoría'}
+            {families?.[0]?.title || "Sin categoría"}
           </p>
-          <p className="text-xl font-bold text-gray-900">
-            ${price.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-          </p>
+          <p className="text-xl font-bold text-gray-900">{moneyAR(price)}</p>
 
           {/* Stock toggle */}
           <button
@@ -75,10 +80,10 @@ export default function ProductCard({ product: p, producto }) {
           >
             <span>Stock online</span>
             <span className="flex items-center">
-              {products?.[0]?.stock?.toLocaleString() || '—'} un.
+              {products?.[0]?.stock?.toLocaleString() || "—"} un.
               <ChevronDownIcon
                 className={`w-4 h-4 ml-1 transform transition-transform ${
-                  showStock ? 'rotate-180' : ''
+                  showStock ? "rotate-180" : ""
                 }`}
               />
             </span>
