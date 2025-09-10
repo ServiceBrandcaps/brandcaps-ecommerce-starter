@@ -25,6 +25,16 @@ export function CartProvider({ children }) {
     localStorage.setItem("cart", JSON.stringify(cart));
   }, [cart]);
 
+  const clearCart = () => {
+    setCart([]);
+    if (typeof window !== "undefined") {
+      try {
+        // ajustá la key si usás otra
+        localStorage.setItem("cart", JSON.stringify([]));
+      } catch {}
+    }
+  };
+
   const addToCart = (productOrItem, maybeQty) => {
     const qty = Number.isFinite(maybeQty)
       ? Number(maybeQty)
@@ -45,7 +55,7 @@ export function CartProvider({ children }) {
   );
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, total }}>
+    <CartContext.Provider value={{ cart, addToCart, removeFromCart, clearCart, total }}>
       {children}
     </CartContext.Provider>
   );

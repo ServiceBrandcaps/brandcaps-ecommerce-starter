@@ -1,6 +1,7 @@
 // pages/cart.js
 import React from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
 import NavBar from "../components/NavBar";
 import Footer from "../components/Footer";
 import { useCart } from "../context/CartContext";
@@ -9,8 +10,9 @@ import Link from "next/link";
 import { PlusIcon, MinusIcon, XMarkIcon } from "@heroicons/react/24/outline";
 
 export default function CartPage() {
-  const { cart, total, removeFromCart, addToCart } = useCart();
+  const { cart, total, removeFromCart, clearCart, addToCart } = useCart();
   const toast = useToast();
+  const router = useRouter();
   const [customer, setCustomer] = React.useState({
     name: "",
     email: "",
@@ -62,8 +64,20 @@ export default function CartPage() {
         title: "¡Cotización enviada!",
         description: `Te escribiremos a ${customer.email} a la brevedad.`,
       });
-      // reset del formulario
-      setCustomer({ name: "", email: "", phone: "", company: "", message: "" });
+      setTimeout(() => {
+        // ✅ Vaciar carrito como si se hubiera “cerrado” la compra
+        clearCart();
+        // ✅ Reset del formulario
+        setCustomer({
+          name: "",
+          email: "",
+          phone: "",
+          company: "",
+          message: "",
+        });
+        // ✅ Navegar a página de gracias
+        router.push("/cotizacion/enviada");
+      }, 1200);
     } catch (err) {
       toast.error({
         title: "No se pudo enviar",

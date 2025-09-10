@@ -1,33 +1,36 @@
 // components/ProductCard.js
 import React, { useState } from "react";
 import Link from "next/link";
+import { useToast } from "@/components/Toast";
 import { useCart } from "../context/CartContext";
 import { ChevronDownIcon } from "@heroicons/react/24/solid";
 
 export default function ProductCard({ product: p, producto }) {
   const { addToCart } = useCart();
+  const toast = useToast();
   const [showStock, setShowStock] = useState(false);
   //console.log(p);
   //console.log(producto);
   // Soportar ambas props (por si la grilla aún envía "producto")
   const product = p || producto;
   if (!product) return null;
+  const minimumOrder = Number(product?.minimum_order_quantity ?? 1);
   //console.log(product);
   // Normalizamos imágenes: array => ok, string "image" => [{url}], main_image_url => [{url}]
-   const images =
-     (Array.isArray(product.images) &&
-       product.images.length > 0 &&
-       product.images) ||
-     (product.image ? [{ url: product.image }] : null) ||
-     (product.main_image_url ? [{ url: product.main_image_url }] : []);
+  const images =
+    (Array.isArray(product.images) &&
+      product.images.length > 0 &&
+      product.images) ||
+    (product.image ? [{ url: product.image }] : null) ||
+    (product.main_image_url ? [{ url: product.main_image_url }] : []);
 
   // console.log(images);
 
   // Elegimos la principal
   const imgData = //product?.images || product?.image;
-     images.find?.((i) => i.main_integrator) ||
-     images.find?.((i) => i.main) ||
-     images[0];
+    images.find?.((i) => i.main_integrator) ||
+    images.find?.((i) => i.main) ||
+    images[0];
   //console.log(imgData);
 
   const imgUrl = imgData?.url || imgData?.image_url || imgData?.src || "";
@@ -44,6 +47,67 @@ export default function ProductCard({ product: p, producto }) {
       currency: "ARS",
       maximumFractionDigits: 2,
     }).format(Number(Math.round(n) || 0));
+
+  const qtyNum = 1;
+  const belowMinimum =
+    Number.isFinite(qtyNum) && qtyNum > 0 && qtyNum < minimumOrder;
+
+  const handleAddToCart = () => {
+    //if (isDisabled) return;
+
+    const Name = (variant, IsBrandcapsProduct) => {
+      const parts = [];
+      //console.log(v);
+      if (IsBrandcapsProduct) {
+        if (variant?.color) parts.push(variant.color);
+        if (variant?.size) parts.push(variant.size);
+        if (variant?.material) parts.push(variant.material);
+      } else {
+        if (variant?.elementDescription1 != " ")
+          parts.push(variant.elementDescription1);
+        if (variant?.elementDescription2 != " ")
+          parts.push(variant.elementDescription2);
+        if (variant?.elementDescription3 != " ")
+          parts.push(variant.elementDescription3);
+        if (variant?.additionalDescription != " ")
+          parts.push(variant.additionalDescription);
+      }
+      //console.log(parts)
+      const uniq = (arr) => [...new Set(arr)];
+      const all = uniq(parts.map((p) => p).filter(Boolean));
+      return {
+        key: variant?.id ?? variant?.sku ?? idx,
+        label: `${all.filter(Boolean).join(" - ") || "Variante"}`,
+      };
+    };
+
+    const item = {
+      _id: Name(product.variants[0], product.brandcapsProduct).key,
+      sku: product.sku,
+      name: `${product.name} – ${
+        Name(product.variants[0], product.brandcapsProduct).label
+      }`,
+      price: price, // unitario ya calculado por el tramo
+      images: imgData || [],
+      variant: product.variants[0],
+      qty: qtyNum, // 👈 también dentro del objeto
+      belowMinimum, // 👈 marca para el carrito/checkout
+      pricingNote: belowMinimum
+        ? "Precio unitario sujeto a revisión por cantidad menor al mínimo."
+        : null,
+    };
+
+    addToCart(item, qtyNum); // 👈 y además como 2º argumento
+
+    // Toast estilo Mercado Libre
+    toast.success({
+      title: "Agregado al carrito",
+      description: product.name,
+      image: imgData?.url || imgData?.image_url || imgData?.src || "",
+      action: { label: "Ir al carrito", href: "/cart" },
+      duration: 5000,
+    });
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-md overflow-hidden relative w-[250px] h-[380px]">
@@ -93,7 +157,7 @@ export default function ProductCard({ product: p, producto }) {
 
       {/* Botón circular carrito */}
       <button
-        onClick={() => addToCart(producto)}
+        onClick={handleAddToCart}
         className="absolute top-3 right-3 bg-black hover:bg-gray-700 text-white p-2 rounded-full shadow-lg focus:outline-none cursor-pointer transition-transform transform hover:scale-110"
       >
         <svg

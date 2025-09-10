@@ -51,8 +51,8 @@ export default function Footer() {
               </a>
             </li>
             <li>
-              <a href="mailto:ventas@brandcaps.com.ar" className="hover:underline">
-                ventas@brandcaps.com.ar
+              <a href="mailto:contacto@brandcaps.com.ar" className="hover:underline">
+                contacto@brandcaps.com.ar
               </a>
             </li>
             <li>
