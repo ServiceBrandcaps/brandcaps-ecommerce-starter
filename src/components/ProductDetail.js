@@ -84,7 +84,7 @@ export default function ProductDetail({ producto }) {
   // Datos varios
   const description = producto.description || "Sin descripción";
   const printingTypes = producto.printing_types?.length
-    ? producto.printing_types.join(", ")
+    ?  producto.printing_types.map((py) => py.description).join(", ")
     : "No disponible";
 
   const dims = producto.dimensions || {};
