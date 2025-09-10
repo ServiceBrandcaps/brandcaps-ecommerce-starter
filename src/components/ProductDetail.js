@@ -145,7 +145,7 @@ export default function ProductDetail({ producto }) {
     // console.log(images);
 
     // Elegimos la principal
-    const imgData = //product?.images || product?.image;
+    const imgData = 
       images.find?.((i) => i.main_integrator) ||
       images.find?.((i) => i.main) ||
       images[0];
