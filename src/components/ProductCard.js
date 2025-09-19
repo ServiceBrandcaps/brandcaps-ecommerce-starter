@@ -1,5 +1,6 @@
 // components/ProductCard.js
 "use client";
+
 import React, { useMemo, useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/components/Toast";
@@ -8,37 +9,60 @@ import { ChevronDownIcon } from "@heroicons/react/24/solid";
 
 export default function ProductCard({ product: p, producto, variant = "default" }) {
   const compact = variant === "compact";
+
+  // Hooks SIEMPRE arriba y sin condiciones
   const { addToCart } = useCart();
   const toast = useToast();
   const [showStock, setShowStock] = useState(false);
 
-  const product = p || producto;
-  if (!product) return null;
+  // Nunca retornamos antes de los hooks: usamos default {}
+  const product = p || producto || {};
+  const hasProduct = Boolean(product?._id || product?.id || product?.sku || product?.name);
 
-  const id = product._id || product.id;
-  const name = product.name || product.title || "Producto";
+  const id = product._id || product.id || product.sku || "unknown";
+  const name = product.name || product.title || product.sku || "Producto";
   const minimumOrder = Number(product?.minimum_order_quantity ?? 1);
 
   const images = Array.isArray(product.images) ? product.images : [];
-  const imgData = images.find?.(i => i.main_integrator) || images.find?.(i => i.main) || images[0];
+  const imgData =
+    images.find?.(i => i.main_integrator) ||
+    images.find?.(i => i.main) ||
+    images[0];
   const imgUrl = imgData?.url || imgData?.image_url || imgData?.src || "";
 
-  const providerItems = product.products ?? [];
-  const variants = product.variants ?? [];
+  const providerItems = Array.isArray(product.products) ? product.products : [];
+  const variants = Array.isArray(product.variants) ? product.variants : [];
 
+  // Hook estable (no condicional)
   const chosenVariant = useMemo(() => {
-    const v = variants?.[0] || null;
+    const v = variants[0];
     if (v) return v;
-    const it = providerItems?.[0] || null;
+    const it = providerItems[0];
     return it
-      ? { id: it.id || it.sku, sku: it.sku, stock: it.stock, color: it.color || "", size: it.size || "", material: it.material || "", achromatic: !!it.achromatic }
+      ? {
+          id: it.id || it.sku,
+          sku: it.sku,
+          stock: it.stock,
+          color: it.color || "",
+          size: it.size || "",
+          material: it.material || "",
+          achromatic: !!it.achromatic,
+        }
       : null;
   }, [variants, providerItems]);
+
+  // A partir de acá, si no hay data suficiente, cortamos
+  if (!hasProduct) return null;
 
   const stockShown = providerItems?.[0]?.stock ?? chosenVariant?.stock ?? null;
 
   const price = Number(product.salePrice ?? product.price ?? product.basePrice ?? 0);
-  const moneyAR = (n) => new Intl.NumberFormat("es-AR", { style: "currency", currency: "ARS", maximumFractionDigits: 2 }).format(Number(n || 0));
+  const moneyAR = (n) =>
+    new Intl.NumberFormat("es-AR", {
+      style: "currency",
+      currency: "ARS",
+      maximumFractionDigits: 2,
+    }).format(Number(n || 0));
 
   const qtyNum = 1;
   const belowMinimum = qtyNum > 0 && qtyNum < minimumOrder;
@@ -54,10 +78,13 @@ export default function ProductCard({ product: p, producto, variant = "default" 
         variant: chosenVariant || undefined,
         qty: qtyNum,
         belowMinimum,
-        pricingNote: belowMinimum ? "Precio unitario sujeto a revisión por cantidad menor al mínimo." : null,
+        pricingNote: belowMinimum
+          ? "Precio unitario sujeto a revisión por cantidad menor al mínimo."
+          : null,
       },
       qtyNum
     );
+
     toast.success({
       title: "Agregado al carrito",
       description: name,
@@ -68,9 +95,8 @@ export default function ProductCard({ product: p, producto, variant = "default" 
   };
 
   return (
-    <div className={`bg-white rounded-xl border hover:shadow-lg transition overflow-hidden flex flex-col ${compact ? "w-[250px]" : ""} ${compact ? "h-[400px]" : ""}`}>
+    <div className={`bg-white rounded-xl border hover:shadow-lg transition overflow-hidden flex flex-col ${compact ? "w-[250px] h-[400px]" : ""}`}>
       <Link href={`/product/${id}`} className="block">
-        {/* ⬇️ aspecto compacto en relacionados */}
         <div className={`${compact ? "aspect-square" : "aspect-[4/5]"} bg-gray-50 grid place-items-center`}>
           {imgUrl ? (
             <img src={imgUrl} alt={name} className="h-full w-full object-contain" loading="lazy" />
@@ -86,11 +112,13 @@ export default function ProductCard({ product: p, producto, variant = "default" 
           )}
           <p className={`font-semibold text-gray-900 ${compact ? "text-sm" : "text-base sm:text-lg"}`}>{moneyAR(price)}</p>
 
-          {/* En compacto ocultamos el bloque de stock para achicar altura */}
           {!compact && (
             <>
               <button
-                onClick={(e) => { e.preventDefault(); setShowStock((v) => !v); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setShowStock((v) => !v);
+                }}
                 aria-expanded={showStock}
                 className="w-full flex justify-between items-center text-xs sm:text-sm text-gray-700 border-t pt-2"
               >
@@ -107,7 +135,10 @@ export default function ProductCard({ product: p, producto, variant = "default" 
       </Link>
 
       <div className={`p-3 ${compact ? "" : "sm:p-4 pt-0"}`}>
-        <button onClick={handleAddToCart} className={`w-full rounded-lg bg-black hover:bg-gray-800 text-white ${compact ? "py-1.5 text-xs" : "py-2 text-sm"} font-medium transition`}>
+        <button
+          onClick={handleAddToCart}
+          className={`w-full rounded-lg bg-black hover:bg-gray-800 text-white ${compact ? "py-1.5 text-xs" : "py-2 text-sm"} font-medium transition`}
+        >
           Agregar al carrito
         </button>
       </div>
