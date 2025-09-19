@@ -38,7 +38,7 @@ export default function RelatedProductsCarousel({ productos = [] }) {
       >
         {productos.map((p) => (
           <div key={p.id} className="flex-shrink-0">
-            <ProductCard producto={p} />
+            <ProductCard producto={p} variant="compact" />
           </div>
         ))}
       </div>

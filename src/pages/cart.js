@@ -221,8 +221,8 @@ export default function CartPage() {
                 </div>
 
                 {/* Tabla de productos */}
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left">
+                <div className="-mx-3 md:mx-0 overflow-x-auto md:overflow-visible">
+                  <table className="min-w-[640px] w-full text-left">
                     <thead>
                       <tr className="border-b">
                         <th className="py-2">&nbsp;</th>
