@@ -84,7 +84,7 @@ export default function ProductDetail({ producto }) {
   // Datos varios
   const description = producto.description || "Sin descripción";
   const printingTypes = producto.printing_types?.length
-    ?  producto.printing_types.map((py) => py.description).join(", ")
+    ? producto.printing_types.map((py) => py.description).join(", ")
     : "No disponible";
 
   const dims = producto.dimensions || {};
@@ -97,6 +97,11 @@ export default function ProductDetail({ producto }) {
   const infoText =
     producto.supplementary_information_text || "Sin información adicional";
   const sku = producto.sku || null;
+  const IVA = 0.21;
+  const bruto = Number(producto.basePrice) || 0; // por si viene string o null
+
+  // Si el precio tiene IVA incluido y para los Brandcaps querés mostrar sin IVA:
+  const precioBase = brandcapsProduct ? +(bruto / (1 + IVA)).toFixed(2) : bruto;
 
   const moneyAR = (n) =>
     new Intl.NumberFormat("es-AR", {
@@ -145,7 +150,7 @@ export default function ProductDetail({ producto }) {
     // console.log(images);
 
     // Elegimos la principal
-    const imgData = 
+    const imgData =
       images.find?.((i) => i.main_integrator) ||
       images.find?.((i) => i.main) ||
       images[0];
@@ -196,7 +201,7 @@ export default function ProductDetail({ producto }) {
             </span>
           </p>
           <p className="text-gray-400 text-sm italic mb-4">
-            Precio sin impuesto: {moneyAR(producto.basePrice)} /por unidad
+            Precio sin impuesto: {moneyAR(precioBase)} /por unidad
           </p>
           {belowMinimum && (
             <div className="flex space-x-3 mb-4 border rounded-lg border-yellow-400 p-3 bg-yellow-50">
