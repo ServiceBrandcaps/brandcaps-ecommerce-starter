@@ -31,8 +31,8 @@ export default function PriceTiersTable({ tiers = [], margin = 0, qty = 0 }) {
   if (!sorted.length) return null;
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full border border-gray-200 text-sm">
+    <div className="-mx-3 md:mx-0 overflow-x-auto md:overflow-visible">
+      <table className="min-w-[640px] w-full border border-gray-200 text-sm">
         <thead>
           <tr className="bg-gray-50 text-gray-700">
             <th className="px-3 py-2 text-left font-medium border-r border-gray-200">

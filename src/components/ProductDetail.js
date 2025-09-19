@@ -185,8 +185,8 @@ export default function ProductDetail({ producto }) {
 
   return (
     <>
-      {/* Galería e info básica */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12">
+      {/* Galería e info básica grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12 */}
+      <div className="grid gap-6 lg:grid-cols-2">
         <Head>
           <title>{producto.name}</title>
         </Head>

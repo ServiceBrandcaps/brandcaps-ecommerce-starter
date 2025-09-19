@@ -63,10 +63,10 @@ export default function HomePage({ productos }) {
       <NavBar />
       <Hero />
 
-      <main className="pt-5 max-w-7xl mx-auto px-4 space-y-16 mb-16">
+      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6"> {/*pt-5 max-w-7xl mx-auto px-4 space-y-16 mb-16*/}
         {/* Sección de promociones */}
         <section>
-          <PromoSection
+          <PromoSection fullBleed={true} contain={false}
             banners={[
               {
                 id: "madre",
@@ -80,7 +80,7 @@ export default function HomePage({ productos }) {
         {/* Productos Destacados */}
         <section>
           <h2 className="text-2xl font-bold mb-4">Productos Destacados</h2>
-          <ProductCarousel productos={productos} />
+          <ProductCarousel productos={productos}  variant="compact"/>
         </section>
 
         {/* Sección de promociones */}

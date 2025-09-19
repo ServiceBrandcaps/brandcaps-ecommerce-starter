@@ -13,7 +13,7 @@ export default function MostSearched() {
   return (
     <div>
       <h3 className="text-xl font-semibold mb-4">Los más buscados</h3>
-      <div className="flex space-x-4 overflow-x-auto scrollbar-hide">
+      <div className="overflow-x-auto scrollbar-hide grid grid-cols-1 md:grid-cols-3 gap-6">
         {CATS.map((cat) => (
           <Link
             key={cat.id}

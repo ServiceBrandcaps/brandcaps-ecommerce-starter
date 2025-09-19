@@ -16,11 +16,12 @@ export default function PromoSection(props) {
       <Link
         key={b.id}
         href={`/search?family=${encodeURIComponent(b.family)}`}
-        className="col-span-1 lg:col-span-1 row-span-2 block rounded-lg overflow-hidden bg-cover bg-center h-[200px] w-full"
+        className="col-span-1 lg:col-span-1 row-span-2 block rounded-lg overflow-hidden bg-cover bg-center h-[200px] w-full r"
         style={{
           backgroundImage: `url('${b.image}')`,
-            backgroundPosition: "left center",
-            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundSize: "contain, cover",
+            backgroundRepeat: "no-repeat",
         }}
       />
     ))}
