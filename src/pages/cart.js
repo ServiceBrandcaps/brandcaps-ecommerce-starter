@@ -103,7 +103,7 @@ export default function CartPage() {
             </li>
             <li>
               Vía e-mail enviando un mail a{" "}
-              <strong>ventas@brandcaps.com.ar</strong> con tu pedido. ¡No te
+              <strong>contato@brandcaps.com.ar</strong> con tu pedido. ¡No te
               olvides de adjuntar el logo!
             </li>
             <li>
@@ -123,8 +123,7 @@ export default function CartPage() {
             de la seña del 50% y la aprobación del preview digital.
           </p>
           <p>
-            La demora de producción aproximada es de 7 a 10 días hábiles.
-            Dependiendo del producto, cantidad y técnica de aplicación. Si tenés
+            La demora de producción depende del producto, cantidad y técnica de aplicación. Si tenés
             una fecha de entrega estipulada informaselo a tu comercial para
             coordinar.
           </p>
@@ -132,13 +131,14 @@ export default function CartPage() {
             Una vez finalizada la producción, se te enviará un email de aviso
             para coordinar la entrega.
           </p>
-          <p>
+          <p className="mt-2">
             {" "}
-            <strong> Excepciones: </strong>{" "}
+            <strong> Demoras aproximadas según la técnica de aplicación: </strong>{" "}
           </p>
           <ul className="list-disc list-inside mt-2">
-            <li>Cuaderno personalizado: 10 a 15 días hábiles</li>
-            <li>Mouse Pad y Cintas/llaveros: 25 días hábiles.</li>
+            <li>Estampado: 10 a 15 días hábiles después del pago.</li>
+            <li>Bordado: 20 a 25 días hábiles después del pago.</li>
+            <li>Grabado: 15 a 20 días hábiles después del pago.</li>
           </ul>
         </div>
       ),
@@ -148,19 +148,7 @@ export default function CartPage() {
       answer: (
         <div className="text-gray-700">
           <p>
-            Si, el área de pedidos te enviará por mail un preview digital de
-            el/los productos para que nos des tu ok.
-          </p>
-          <p>
-            En este documento podrás corroborar color/es de impresión y de
-            material, números telefónicos, abreviaturas, nombres personales,
-            errores de ortografía, logotipos y textos en general, su ubicación y
-            tamaños.
-          </p>
-          <p>
-            Las aprobaciones o cambios de diseño se realizan exclusivamente vía
-            email. Toda modificación que no se haya solicitado por este medio no
-            será tomada como válida.
+            Luego de confirmar el pedido, te enviamos un boceto(imagen de referencia con el logo) para confirmar el diseño final.
           </p>
         </div>
       ),
@@ -170,30 +158,11 @@ export default function CartPage() {
       answer: (
         <div className="text-gray-700">
           <ul className="list-disc list-inside mt-2">
-            <li>Transferencia bancaria</li>
+            <li>Seña: 50% del monto total. El saldo se abona al finalizar el trabajo.</li>
             <li>
-              E-cheqs a 30 días corridos de Fecha de Factura. Consultá más
-              opciones de financiación con tu ejecutivo de cuenta
+              Pago y envío: Aceptamos transferencia o depósito si no estás en Córdoba.
             </li>
-            <li>Mercado Pago (*)</li>
-            <li>Tarjetas de Crédito y de Débito Corporativas (*)</li>
-            <li>Cuenta en dólares en Payoneer/PayPal (**)</li>
-            <li>No aceptamos efectivo ni cheques físicos.</li>
           </ul>
-          <p>
-            Luego de realizar el pago de tu pedido envíanos el comprobante
-            administracion@brandcaps.com.ar para que ingrese a producción.
-          </p>
-          <p>
-            (*) Los pagos abonados con Mercado Pago y tarjetas de crédito y
-            débito tienen un incremento del 10%. Por favor consultar antes de
-            solicitarlo.
-          </p>
-          <p>
-            (**) Los pagos abonados en dólares con Payoneer o PayPal se
-            convierten a la cotización del dólar MEP según la fecha en la que se
-            abone.
-          </p>
         </div>
       ),
     },
@@ -202,23 +171,8 @@ export default function CartPage() {
       answer: (
         <div className="text-gray-700">
           <p>Si, realizamos envíos a todo el país.</p>
-          <p>Realizamos envíos con estas empresas de logística:</p>
-          <ul className="list-disc list-inside mt-2">
-            <li>OCA</li>
-            <li>ANDREANI</li>
-            <li>SENDBOX</li>
-            <li>VIACARGO</li>
-            <li>CREDIFIN</li>
-            <li>EXPRESO BICENTENARIO</li>
-          </ul>
-          <p>
-            Todas las empresas de logística cuentan con sistema de tracking de
-            pedidos.
-          </p>
-          <p>
-            Nuestra empresa también cuenta con un área de logística que brinda
-            soporte adicional para el seguimiento de pedidos.
-          </p>
+          <p>El costo corre por cuenta del cliente.</p>
+          <p>Te ayudamos a elegir la mejor opción de transporte y calcular el costo según el destino.</p>
         </div>
       ),
     },

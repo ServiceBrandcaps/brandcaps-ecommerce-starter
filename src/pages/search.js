@@ -1,8 +1,9 @@
 import Head from "next/head";
-import NavBar from "@/components/NavBar";
-import ProductGrid from "@/components/ProductGrid";
 import Link from "next/link";
 import { API_BASE } from "@/lib/api";
+import NavBar from "@/components/NavBar";
+import ProductGrid from "@/components/ProductGrid";
+import PromoSection from "../components/PromoSection";
 
 export default function Buscar({ items, total, page, totalPages, query }) {
   const loading = false;
@@ -16,6 +17,20 @@ export default function Buscar({ items, total, page, totalPages, query }) {
       <NavBar />
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+
+              {/* Sección de promociones */}
+        <section>
+          <PromoSection
+            banners={[
+              {
+                id: "marca",
+                family: "Ferias del Agro y Rural",
+                image: "/banners/potencia tu marca.webp",
+              },
+            ]}
+          />
+        </section>
+
         <h1 className="text-xl font-semibold">Resultados</h1>
 
         <ProductGrid items={items} loading={loading} />
