@@ -55,6 +55,20 @@ export default function MobileCategories({ open, onClose }) {
           </button>
         </div>
         <ul className="space-y-0.5">
+          <li>
+            <Link
+              href="/search"
+              className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-gray-50 text-gray-900"
+              onClick={onClose}
+            >
+              <span className="grid h-8 w-8 place-items-center rounded-md border">
+                <svg viewBox="0 0 20 20" className="h-4 w-4" fill="#9A9A9A">
+                  <path d="M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z" />
+                </svg>
+              </span>
+              <span>Ver todo</span>
+            </Link>
+          </li>
           {items.map((f) => {
             const toArray = (v) => (Array.isArray(v) ? v : v ? [v] : []);
             const href = {

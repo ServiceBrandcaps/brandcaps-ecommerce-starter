@@ -4,6 +4,7 @@ import { API_BASE } from "@/lib/api";
 import NavBar from "@/components/NavBar";
 import ProductGrid from "@/components/ProductGrid";
 import PromoSection from "../components/PromoSection";
+import Footer from "@/components/Footer";
 
 export default function Buscar({ items, total, page, totalPages, query }) {
   const loading = false;
@@ -17,8 +18,7 @@ export default function Buscar({ items, total, page, totalPages, query }) {
       <NavBar />
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-
-              {/* Sección de promociones */}
+        {/* Sección de promociones */}
         <section>
           <PromoSection
             banners={[
@@ -67,6 +67,7 @@ export default function Buscar({ items, total, page, totalPages, query }) {
           </div>
         </div>
       </main>
+      <Footer />
     </>
   );
 }
@@ -126,7 +127,13 @@ export async function getServerSideProps(ctx) {
     // La API devuelve: { items, total, page, totalPages }
     const data = await res.json();
     //console.log(data);
-    const items = Array.isArray(data.items) ? data.items : [];
+    const priceOf = (p) => {
+      const v = Number(p?.salePrice ?? p?.price ?? p?.basePrice);
+      return Number.isFinite(v) ? v : Number.MAX_SAFE_INTEGER; // sin precio al final
+    };
+    const items = (Array.isArray(data.items) ? data.items : [])
+      .slice()
+      .sort((a, b) => priceOf(a) - priceOf(b));
     const safeTotal = Number.isFinite(Number(data.total))
       ? Number(data.total)
       : 0;

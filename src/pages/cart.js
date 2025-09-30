@@ -158,11 +158,12 @@ export default function CartPage() {
       answer: (
         <div className="text-gray-700">
           <ul className="list-disc list-inside mt-2">
-            <li>Seña: 50% del monto total. El saldo se abona al finalizar el trabajo.</li>
+            <li>Seña: 50% del monto total.</li>
             <li>
-              Pago y envío: Aceptamos transferencia o depósito si no estás en Córdoba.
+              Saldo: Se abona al finalizar el trabajo.
             </li>
           </ul>
+          <p>Aceptamos transferencia o depósito si no estás en Córdoba.</p>
         </div>
       ),
     },

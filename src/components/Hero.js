@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 export default function Hero() {
   return (
     <section className="relative bg-gradient-to-r from-black to-gray-600 text-white py-20 px-6 text-center">
@@ -8,12 +10,12 @@ export default function Hero() {
         <p className="text-lg md:text-xl mb-6">
           Tu tienda online de confianza. Calidad y envío rápido a todo el país.
         </p>
-        {/* <a
-          href="#productos"
+        <Link
+          href="/search"
+          prefetch={false}
           className="inline-block bg-white text-gray-600 font-semibold py-3 px-6 rounded shadow hover:bg-gray-100 transition"
-        >
-          Explorar productos
-        </a> */}
+        > Explorar productos
+        </Link> 
       </div>
     </section>
   );
