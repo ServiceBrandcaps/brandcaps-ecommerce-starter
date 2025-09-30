@@ -66,7 +66,7 @@ export default function HomePage({ productos }) {
       <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6"> {/*pt-5 max-w-7xl mx-auto px-4 space-y-16 mb-16*/}
         {/* Sección de promociones */}
         <section>
-          <PromoSection fullBleed={true} contain={false}
+          <PromoSection
             banners={[
               {
                 id: "madre",
@@ -102,7 +102,7 @@ export default function HomePage({ productos }) {
         </section>
 
         {/* Sección Descubrí */}
-        <section>
+        <section className="mb-5">
           <DiscoverSection />
         </section>
 

@@ -33,6 +33,14 @@ export default function ProductCard({ product: p, producto, variant = "default" 
   const providerItems = Array.isArray(product.products) ? product.products : [];
   const variants = Array.isArray(product.variants) ? product.variants : [];
 
+  const sStock = useMemo(() => {
+    let s = 0;
+    providerItems.forEach(i => {
+      s = s + i.stock
+    });
+    return s ? s : 0;
+  }, [providerItems]);
+
   // Hook estable (no condicional)
   const chosenVariant = useMemo(() => {
     const v = variants[0];
@@ -54,7 +62,7 @@ export default function ProductCard({ product: p, producto, variant = "default" 
   // A partir de acá, si no hay data suficiente, cortamos
   if (!hasProduct) return null;
 
-  const stockShown = providerItems?.[0]?.stock ?? chosenVariant?.stock ?? null;
+  const stockShown = sStock ?? providerItems?.[0]?.stock ?? chosenVariant?.stock ?? null;
 
   const price = Number(product.salePrice ?? product.price ?? product.basePrice ?? 0);
   const moneyAR = (n) =>

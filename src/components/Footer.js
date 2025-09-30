@@ -46,8 +46,8 @@ export default function Footer() {
           <h4 className="font-semibold mb-2">Soporte</h4>
           <ul className="space-y-1 text-sm">
             <li>
-              <a href="tel:+5493518765221" className="hover:underline">
-                +5493518765221
+              <a href="tel:+5493517067899" className="hover:underline">
+                +5493517067899
               </a>
             </li>
             <li>

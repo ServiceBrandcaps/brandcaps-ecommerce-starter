@@ -145,6 +145,25 @@ export default function CategoriesMenu({ className = "" }) {
           <div className="grid grid-cols-4 divide-x">
             {columns.map((col, ci) => (
               <ul key={ci} className="p-3">
+                {ci === 0 && (
+                  <li className="mb-1">
+                    <Link
+                      href="/search"
+                      className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-gray-50 text-gray-900"
+                      onClick={() => setOpen(false)}
+                      prefetch={false}
+                    >
+                      <span className="grid h-8 w-8 place-items-center rounded-md border">
+                        {/* iconito de “grid” */}
+                        <svg viewBox="0 0 20 20" className="h-4 w-4" fill="#9A9A9A">
+                          <path d="M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z" />
+                        </svg>
+                      </span>
+                      <span className=" text-gray-900">Ver todo</span>
+                    </Link>
+                  </li>
+                )}
+
                 {(!col || col.length === 0) && ci === 0 && (
                   <li className="px-2 py-2 text-sm text-gray-500">
                     No hay categorías disponibles
