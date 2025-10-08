@@ -15,6 +15,26 @@ const slugify = (s = "") =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
+const hideFamily = (title = "") => {
+  const t = title
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const s = slugify(title); // ej: "logo-24", "logo-24hs"
+  return (
+    t.includes("logo 24") ||
+    t.includes("logo 24hs") ||
+    t.includes("logo 24 hs") ||
+    s === "logo-24" ||
+    s === "logo-24hs" ||
+    s === "logo24" ||
+    s.startsWith("logo-24")
+  );
+};
+
 // 🔧 dedupe por id o slug(title), prioriza el que tenga icon_url/url
 function dedupeFamilies(fams = []) {
   const map = new Map();
@@ -22,6 +42,7 @@ function dedupeFamilies(fams = []) {
     if (!f) continue;
     const id = (f.id ?? f._id ?? "").toString().trim();
     const title = (f.description ?? f.title ?? "").toString().trim();
+    if (hideFamily(title)) continue; // ⬅️ filtrar acá
     const key = id || slugify(title);
     if (!key) continue;
 

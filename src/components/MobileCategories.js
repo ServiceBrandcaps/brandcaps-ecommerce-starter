@@ -10,6 +10,27 @@ const slug = (s) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
 
+const hideFamily = (title = "") => {
+  const t = title
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  const s = slug(title);
+  return (
+    t.includes("logo 24") ||
+    t.includes("logo 24hs") ||
+    t.includes("logo 24 hs") ||
+    s === "logo-24" ||
+    s === "logo-24hs" ||
+    s === "logo24" ||
+    s.startsWith("logo-24")
+  );
+};
+
+
 export default function MobileCategories({ open, onClose }) {
   const [items, setItems] = useState([]);
   const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/$/, "");
@@ -24,6 +45,7 @@ export default function MobileCategories({ open, onClose }) {
         const arr = Array.isArray(d) ? d : d.families || [];
         const hasTitle = (f) => !!(f?.title ?? f?.name ?? "").toString().trim();
         setItems(arr.filter(hasTitle));
+        setItems(arr.filter(hasTitle).filter((f) => !hideFamily(f.title || f.description || f.name)));
       })
       .catch(() => setItems([]));
     return () => ac.abort();

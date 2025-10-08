@@ -10,14 +10,177 @@ import PriceTiersTable from "@/components/ProductDetailTablePrices";
 import { InformationCircleIcon } from "@heroicons/react/24/solid";
 
 export default function ProductDetail({ producto }) {
+  // Estados seleccionados (uno por dropdown) y la variante resultante
+  const [selColor, setSelColor] = useState(null);
+  const [selSize, setSelSize] = useState(null);
+  const [variant, setVariant] = useState(null);
   const { addToCart } = useCart();
   const toast = useToast();
   const brandcapsProduct = producto?.brandcapsProduct ?? false;
   // Variantes y mínimos
-  const variants = brandcapsProduct
-    ? producto?.products ?? []
-    : producto?.variants ?? [];
-  const [variant, setVariant] = useState(variants[0] ?? null);
+  // const variants = brandcapsProduct
+  //   ? producto?.products ?? []
+  //   : producto?.variants ?? [];
+  // const [variant, setVariant] = useState(variants[0] ?? null);
+  // Variantes crudas (cada item puede tener color/size)
+  const rawVariants = useMemo(
+    () =>
+      brandcapsProduct ? producto?.products ?? [] : producto?.variants ?? [],
+    [brandcapsProduct, producto?.products, producto?.variants]
+  );
+
+  // Helpers para leer color/talle según origen
+  const normText = (s) => (typeof s === "string" ? s.trim() : s ?? "");
+  const normKey = (s) =>
+  normText(s)?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || "";
+  const getColor = (v) =>
+    brandcapsProduct ? normText(v?.color) : normText(v?.elementDescription2);
+  const getSize = (v) =>
+    brandcapsProduct ? normText(v?.size) : normText(v?.elementDescription1);
+
+    // tratar valores "no talle" o que son en realidad un color
+const normalizeSizeValue = (s) => {
+  const t = normKey(s);
+  if (!t || t === "-" || t === "—") return "";
+  if (["X small","Small","Medium","Large","X Large","XX Large","3 X Large","4 X Large", "2 X Large"].includes(t)) return "";
+  if (isLikelyColor(t)) return ""; // <- clave: descarta colores colados en ED1
+  return s;
+};
+
+// Set de colores conocidos = (colores de variantes) + una lista base
+const knownColorSet = useMemo(() => {
+  const set = new Set();
+  (rawVariants || []).forEach((v) => {
+    const c = normKey(getColor(v));
+    if (c) set.add(c);
+  });
+  // fallback común en español
+  [
+    "blanco","negro","rojo","azul","verde","amarillo","gris","plateado","plata","dorado",
+    "oro","marron","cafe","beige","violeta","morado","rosa","fucsia","celeste","turquesa",
+    "naranja","transparente","transp","grafito","natural","kaki"
+  ].forEach((c) => set.add(c));
+  return set;
+}, [rawVariants, brandcapsProduct, getColor, normKey]); // getColor depende de brandcapsProduct
+
+ // pool actual (todas o filtradas por color seleccionado)
+ const currentPool = useMemo(() => {
+   if (!selColor?.color) return rawVariants || [];
+   return (rawVariants || []).filter((v) => getColor(v) === selColor.color);
+ }, [rawVariants, selColor, getColor]);
+
+const isLikelyColor = (val) => {
+  const n = normKey(val);
+  if (!n) return false;
+  if (knownColorSet.has(n)) return true;
+  // Maneja combos tipo "blanco/negro", "blanco - negro", etc.
+  return n.split(/[\/,\-+,; ]+/).some((tok) => knownColorSet.has(tok));
+};
+
+
+  // ¿todas/alguna variante es acromática?
+  const isAchromaticGlobal = useMemo(() => {
+    return (
+      Array.isArray(rawVariants) &&
+      rawVariants.length > 0 &&
+      rawVariants.every((v) => !!v?.achromatic)
+    );
+  }, [rawVariants]);
+
+  // mapa color -> ¿todas las variantes de ese color son acromáticas?
+  const colorAchromaticMap = useMemo(() => {
+    const m = new Map();
+    const byColor = new Map();
+    for (const v of rawVariants || []) {
+      const c = getColor(v) || "__no_color__";
+      if (!byColor.has(c)) byColor.set(c, []);
+      byColor.get(c).push(v);
+    }
+    for (const [c, arr] of byColor) {
+      m.set(c, arr.length > 0 && arr.every((v) => !!v?.achromatic));
+    }
+    return m;
+  }, [rawVariants, getColor]);
+
+  // acromático actual (global o por el color seleccionado)
+  const isAchromaticCurrent = useMemo(() => {
+    if (isAchromaticGlobal) return true;
+    if (!selColor) return false;
+    return !!colorAchromaticMap.get(selColor.color || "__no_color__");
+  }, [isAchromaticGlobal, colorAchromaticMap, selColor]);
+
+  // Listas unificadas de colores y talles (sin duplicados), agregando stock total
+  const colorOptions = useMemo(() => {
+    const m = new Map();
+    for (const v of rawVariants || []) {
+      const c = getColor(v);
+      if (!c) continue;
+
+      const base = !brandcapsProduct
+        ? {
+            id: `color-${c}`,
+            color: c,
+            stock: 0,
+            elementDescription1: normText(v?.elementDescription1),
+            elementDescription2: normText(v?.elementDescription2),
+            elementDescription3: normText(v?.elementDescription3),
+          }
+        : { id: `color-${c}`, color: c, stock: 0 };
+
+      const prev = m.get(c) || base;
+      prev.stock += Number(v?.stock ?? 0);
+      // completa EDx si estaban vacías
+      if (!brandcapsProduct) {
+        prev.elementDescription1 ||= normText(v?.elementDescription1);
+        prev.elementDescription2 ||= normText(v?.elementDescription2);
+        prev.elementDescription3 ||= normText(v?.elementDescription3);
+      }
+      m.set(c, prev);
+    }
+    return [...m.values()];
+  }, [rawVariants, brandcapsProduct, getColor]);
+
+const sizeOptions = useMemo(() => {
+  const m = new Map();
+  for (const v of currentPool) {
+    const s = normalizeSizeValue(getSize(v)); // <- ya filtra colores/único/etc.
+    if (!s) continue;
+    const prev = m.get(s) || { id: `size-${s}`, size: s, stock: 0 };
+    prev.stock += Number(v?.stock ?? 0);
+    m.set(s, prev);
+  }
+  return [...m.values()];
+}, [currentPool, getSize, normalizeSizeValue]);
+
+  // Preseleccionar la primera opción disponible cuando cambian las listas
+  useEffect(() => {
+    setSelColor((prev) =>
+      prev && colorOptions.find((o) => o.color === prev.color)
+        ? prev
+        : colorOptions[0] || null
+    );
+  }, [colorOptions]);
+  useEffect(() => {
+    setSelSize((prev) =>
+      prev && sizeOptions.find((o) => o.size === prev.size)
+        ? prev
+        : sizeOptions[0] || null
+    );
+  }, [sizeOptions]);
+
+
+  // Buscar la variante concreta que matchea color+talle (si existen)
+  useEffect(() => {
+    const found = (rawVariants || []).find((v) => {
+      const cOk =
+        !selColor || !selColor.color || getColor(v) === selColor.color;
+      const sOk = isAchromaticCurrent
+        ? true
+        : !selSize || !selSize.size || getSize(v) === selSize.size;
+      return cOk && sOk;
+    });
+    setVariant(found || null);
+  }, [rawVariants, selColor, selSize, isAchromaticCurrent, getColor, getSize]);
 
   const minimumOrder = Number(producto.minimum_order_quantity ?? 1);
 
@@ -71,8 +234,28 @@ export default function ProductDetail({ producto }) {
     [activeIdx, sortedTiers, price]
   );
 
+  // const isDisabled =
+  //   !variant ||
+  //   Number(variant?.stock ?? 0) <= 0 ||
+  //   !Number.isFinite(qtyNum) ||
+  //   qtyStr === "" ||
+  //   qtyNum <= 0;
+
+  // Debe existir una variante válida y cantidad válida
+  const needsColor = colorOptions.length > 0;
+  //const needsSize = !isAchromaticCurrent && sizeOptions.length > 0;
+const distinctSizesCurrent = useMemo(() => {
+  const set = new Set();
+  sizeOptions.forEach((o) => set.add(normKey(o.size)));
+  return set;
+}, [sizeOptions, normKey]);
+const hasMultipleSizes = distinctSizesCurrent.size > 1;
+const needsSize = !isAchromaticCurrent && hasMultipleSizes;
+
+  const selectionComplete =
+    (!needsColor || !!selColor) && (!needsSize || !!selSize) && !!variant;
   const isDisabled =
-    !variant ||
+    !selectionComplete ||
     Number(variant?.stock ?? 0) <= 0 ||
     !Number.isFinite(qtyNum) ||
     qtyStr === "" ||
@@ -134,7 +317,17 @@ export default function ProductDetail({ producto }) {
       const uniq = (arr) => [...new Set(arr)];
       const all = uniq(parts.map((p) => p).filter(Boolean));
       return {
-        key: variant?.id ?? variant?.sku ?? idx,
+        // si la variante no tiene id/sku, concatenamos producto + color + size
+        key:
+          variant?.id ??
+          variant?.sku ??
+          `${producto?.id || producto?._id || producto?.sku || "prd"}-${
+            getColor(variant) || selColor?.color || ""
+          }-${
+            isAchromaticCurrent
+              ? "no-size"
+              : getSize(variant) || selSize?.size || ""
+          }`,
         label: `${all.filter(Boolean).join(" - ") || "Variante"}`,
       };
     };
@@ -163,7 +356,12 @@ export default function ProductDetail({ producto }) {
       }`,
       price: unitPrice, // unitario ya calculado por el tramo
       images: imgData || [],
-      variant,
+      variant: {
+        ...variant,
+        // aseguramos que viajen color/size seleccionados
+        color: getColor(variant) || selColor?.color || null,
+        size: getSize(variant) || selSize?.size || null,
+      },
       qty: qtyNum, // 👈 también dentro del objeto
       belowMinimum, // 👈 marca para el carrito/checkout
       pricingNote: belowMinimum
@@ -182,6 +380,13 @@ export default function ProductDetail({ producto }) {
       duration: 5000,
     });
   };
+
+  console.debug({
+  sizesLen: sizeOptions.length,
+  isA_global: isAchromaticGlobal,
+  selColor: selColor?.color,
+  isA_current: isAchromaticCurrent,
+});
 
   return (
     <>
@@ -237,19 +442,38 @@ export default function ProductDetail({ producto }) {
             comercial.
           </p>
 
-          {!!variants.length && (
-            <div className="mb-4">
+          {/* Dropdowns unificados */}
+          <div className="mb-4 space-y-3">
+            {/* Color siempre que haya opciones */}
+            {!!colorOptions.length && (
               <VariantSelect
                 className="mt-2"
-                variants={variants}
-                value={variant}
-                onChange={setVariant}
-                label="Color / Variante"
-                placeholder="Elige una opción"
-                IsBrandcapsProduct={brandcapsProduct}
+                variants={colorOptions}
+                value={selColor}
+                onChange={setSelColor}
+                label="Color"
+                placeholder="Elige un color"
+                IsBrandcapsProduct={true}
+                opt="color"
+                // concatena ED1+ED2+ED3 cuando sea Zecat y estemos en modo acromático
+                achromaticMode={isAchromaticCurrent && !brandcapsProduct}
               />
-            </div>
-          )}
+            )}
+
+            {/* Talle solo si no es acromático para el color actual */}
+            {needsSize && (
+              <VariantSelect
+                className="mt-2"
+                variants={sizeOptions}
+                value={selSize}
+                onChange={setSelSize}
+                label="Talle / Medida"
+                placeholder="Elige un talle/medida"
+                IsBrandcapsProduct={true}
+                opt="size"
+              />
+            )}
+          </div>
 
           {/* Cantidad + CTA */}
           <div className="flex items-center space-x-4 mb-4">
@@ -273,7 +497,7 @@ export default function ProductDetail({ producto }) {
             </button>
 
             <span className="text-sm text-gray-600">
-              Stock: {variant?.stock ?? 0} un.
+              Stock: {Number(variant?.stock ?? 0).toLocaleString("es-AR")} un.
             </span>
           </div>
         </div>

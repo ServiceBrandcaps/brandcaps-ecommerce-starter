@@ -103,53 +103,67 @@ export default function ProductCard({ product: p, producto, variant = "default" 
   };
 
   return (
-    <div className={`bg-white rounded-xl border hover:shadow-lg transition overflow-hidden flex flex-col ${compact ? "w-[250px] h-[400px]" : ""}`}>
-      <Link href={`/product/${id}`} className="block">
-        <div className={`${compact ? "aspect-square" : "aspect-[4/5]"} bg-gray-50 grid place-items-center`}>
-          {imgUrl ? (
-            <img src={imgUrl} alt={name} className="h-full w-full object-contain" loading="lazy" />
-          ) : (
-            <div className="h-full w-full bg-gray-200" />
-          )}
-        </div>
-
-        <div className={`p-3 ${compact ? "space-y-1" : "sm:p-4 space-y-1.5"}`}>
-          <h3 className={`font-medium text-gray-900 line-clamp-2 ${compact ? "text-[13px]" : "text-sm sm:text-base"}`}>{name}</h3>
-          {!!product.families?.[0]?.title && (
-            <p className={`text-gray-500 ${compact ? "text-[11px]" : "text-xs sm:text-sm"}`}>{product.families[0].title}</p>
-          )}
-          <p className={`font-semibold text-gray-900 ${compact ? "text-sm" : "text-base sm:text-lg"}`}>{moneyAR(price)}</p>
-
-          {!compact && (
-            <>
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  setShowStock((v) => !v);
-                }}
-                aria-expanded={showStock}
-                className="w-full flex justify-between items-center text-xs sm:text-sm text-gray-700 border-t pt-2"
-              >
-                <span>Stock online</span>
-                <span className="flex items-center">
-                  {Number.isFinite(stockShown) ? `${stockShown.toLocaleString()} un.` : "—"}
-                  <ChevronDownIcon className={`w-4 h-4 ml-1 transform transition-transform ${showStock ? "rotate-180" : ""}`} />
-                </span>
-              </button>
-              {showStock && <div className="text-xs text-gray-600">Cantidad sujeta a cambios sin previo aviso.</div>}
-            </>
-          )}
-        </div>
-      </Link>
-
-      <div className={`p-3 ${compact ? "" : "sm:p-4 pt-0"}`}>
-        <button
-          onClick={handleAddToCart}
-          className={`w-full rounded-lg bg-black hover:bg-gray-800 text-white ${compact ? "py-1.5 text-xs" : "py-2 text-sm"} font-medium transition`}
-        >
-          Agregar al carrito
-        </button>
-      </div>
+<div
+  className={`bg-white rounded-xl border hover:shadow-lg transition overflow-hidden flex flex-col ${compact ?  "w-[250px] h-[400px]": "max-w-[320px] w-full mx-auto"}`}
+>
+  <Link href={`/product/${id}`} className="flex-1 flex flex-col">
+    <div className={`${compact ? "aspect-square" : "aspect-[4/5]"} max-h-72 bg-gray-50 grid place-items-center`}>
+      {imgUrl ? (
+        <img
+          src={imgUrl}
+          alt={name}
+          className="h-full w-full object-contain"
+          loading="lazy"
+        />
+      ) : (
+        <div className="h-full w-full bg-gray-200" />
+      )}
     </div>
+
+    <div className={`p-3 flex-1 flex flex-col ${compact ? "space-y-1" : "sm:p-4 space-y-1.5"}`}>
+      <h3 className={`font-medium text-gray-900 line-clamp-2 ${compact ? "text-[13px]" : "text-sm sm:text-base"}`}>
+        {name}
+      </h3>
+      {!!product.families?.[0]?.title && (
+        <p className={`text-gray-500 ${compact ? "text-[11px]" : "text-xs sm:text-sm"}`}>
+          {product.families[0].title}
+        </p>
+      )}
+      <p className={`font-semibold text-gray-900 ${compact ? "text-sm" : "text-base sm:text-lg"}`}>
+        {moneyAR(price)}
+      </p>
+
+      {!compact && (
+        <>
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              setShowStock((v) => !v);
+            }}
+            aria-expanded={showStock}
+            className="w-full flex justify-between items-center text-xs sm:text-sm text-gray-700 border-t pt-2 mt-auto"
+          >
+            <span>Stock online</span>
+            <span className="flex items-center">
+              {Number.isFinite(stockShown) ? `${stockShown.toLocaleString()} un.` : "—"}
+              <ChevronDownIcon className={`w-4 h-4 ml-1 transform transition-transform ${showStock ? "rotate-180" : ""}`} />
+            </span>
+          </button>
+          {showStock && <div className="text-xs text-gray-600">Cantidad sujeta a cambios sin previo aviso.</div>}
+        </>
+      )}
+    </div>
+  </Link>
+
+  {/* Este bloque queda siempre abajo */}
+  <div className={`p-3 ${compact ? "" : "sm:p-4 pt-0"} mt-auto`}>
+    <button
+      onClick={handleAddToCart}
+      className={`w-full rounded-lg bg-black hover:bg-gray-800 text-white ${compact ? "py-1.5 text-xs" : "py-2 text-sm"} font-medium transition`}
+    >
+      Agregar al carrito
+    </button>
+  </div>
+</div>
   );
 }

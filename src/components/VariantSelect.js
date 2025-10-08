@@ -13,62 +13,87 @@ export default function VariantSelect({
   value, // variante seleccionada (obj) opcional
   onChange, // (variant) => void
   className = "",
-  label = "Color / Variante",
+  label = "Variante",
   placeholder = "Elige una opción",
   IsBrandcapsProduct,
+  opt = "color",
+  achromaticMode = false, // 👈 NUEVO
 }) {
   const [selected, setSelected] = useState(value || null);
 
-  // Elige la primera variante con stock>0 por defecto
+  // // Elige la primera variante con stock>0 por defecto
+  // useEffect(() => {
+  //   if (!variants?.length) {
+  //     setSelected(null);
+  //     return;
+  //   }
+  //   if (!selected) {
+  //     const withStock = variants.find((v) => Number(v?.stock) > 0);
+  //     setSelected(withStock || variants[0]);
+  //     onChange?.(withStock || variants[0]);
+  //   }
+  //   // eslint-disable-next-line react-hooks/exhaustive-deps
+  // }, [variants]);
+
+  // 🔧 sync cuando cambia `value` desde el padre
   useEffect(() => {
-    if (!variants?.length) {
-      setSelected(null);
-      return;
-    }
-    if (!selected) {
-      const withStock = variants.find((v) => Number(v?.stock) > 0);
-      setSelected(withStock || variants[0]);
-      onChange?.(withStock || variants[0]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [variants]);
+    setSelected(value || null);
+  }, [value]);
 
   // Mapea las etiquetas de las variantes
   const options = useMemo(() => {
     return (variants || []).map((v, idx) => {
       const parts = [];
       //console.log(v);
-      if (IsBrandcapsProduct) {
-        if (v?.color) parts.push(v.color);
-        if (v?.size) parts.push(v.size);
-        if (v?.material) parts.push(v.material);
+      if (!IsBrandcapsProduct) {
+        // 👇 En modo achromatic y desplegable de color: concatenamos ED1+ED2+ED3
+        if (achromaticMode && opt === "color") {
+          if (v?.elementDescription1) parts.push(v.elementDescription1);
+          if (v?.elementDescription2) parts.push(v.elementDescription2);
+          if (v?.elementDescription3) parts.push(v.elementDescription3);
+        } else {
+          if (opt == "size" && v?.elementDescription1)
+            parts.push(v.elementDescription1);
+          if (opt == "color" && v?.elementDescription2)
+            parts.push(v.elementDescription2);
+          if (opt == "material" && v?.elementDescription3)
+            parts.push(v.elementDescription3);
+        }
       } else {
-        if (v?.elementDescription1  != ' ') parts.push(v.elementDescription1);
-        if (v?.elementDescription2  != ' ') parts.push(v.elementDescription2);
-        if (v?.elementDescription3 != ' ') parts.push(v.elementDescription3);
-        if (v?.additionalDescription != ' ') parts.push(v.additionalDescription);
+        // Brandcaps: usar v.color / v.size / v.material
+        if (opt === "color" && v?.color) parts.push(v.color);
+        if (opt === "size" && v?.size) parts.push(v.size);
+        if (opt === "material" && v?.material) parts.push(v.material);
       }
 
+      let sumStock = 0;
+      sumStock = typeof v?.stock === "number" ? v?.stock + sumStock : v?.stock;
+
       const stockTxt =
-        typeof v?.stock === "number"
-          ? `${v.stock.toLocaleString("es-AR")} un.`
-          : v?.stock
-          ? `${v.stock} un.`
+        typeof sumStock === "number"
+          ? `${sumStock.toLocaleString("es-AR")} un.`
+          : sumStock
+          ? `${sumStock} un.`
           : "—";
-      //console.log(parts)
+      // const stockTxt =
+      //   typeof v?.stock === "number"
+      //     ? `${v.stock.toLocaleString("es-AR")} un.`
+      //     : v?.stock
+      //     ? `${v.stock} un.`
+      //     : "—";
+      //console.log(parts);
       const uniq = (arr) => [...new Set(arr)];
-      const all = uniq(parts.map(p => p).filter(Boolean));
+      const all = uniq(parts.map((p) => p).filter(Boolean));
+      //console.log(all);
       return {
         key: v?.id ?? v?.sku ?? idx,
-        label: `${
-          all.filter(Boolean).join(" - ") || "Variante"
-        } - ${stockTxt}`, //v?.sku ||
+        label: `${all.filter(Boolean).join(" - ") || "Variante"} - ${stockTxt}`, //v?.sku ||
         value: idx, // usamos el índice para luego recuperar el objeto
         disabled: Number(v?.stock) <= 0,
         raw: v,
       };
     });
-  }, [variants, IsBrandcapsProduct]);
+  }, [variants, opt, IsBrandcapsProduct]);
 
   const handleChange = (e) => {
     const idx = Number(e.target.value);
