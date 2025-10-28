@@ -59,8 +59,8 @@ export default function FilterSidebar({
   );
 
   return (
-    <aside className={`w-[280px] shrink-0 ${className} bg-gray-100 p-5 rounded`}>
-      <div className="sticky top-20 space-y-6">
+    <aside className={`w-full md:w-[280px] shrink-0 ${className} bg-gray-100 p-4 md:p-5 md:mt-7 rounded md:rounded`}>
+      <div className="md:sticky md:top-20 space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium">Filtros</h2>
           <button

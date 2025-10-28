@@ -44,6 +44,7 @@ export default function Buscar({ items, total, page, totalPages, query }) {
 
   // ---------- estado de filtros (seed desde query SSR) ----------
   const [sort, setSort] = useState(query.sort || "price_asc"); // default: precio ↑
+  const [openFilters, setOpenFilters] = useState(false);
   const [priceMin, setPriceMin] = useState(query.priceFrom || "");
   const [priceMax, setPriceMax] = useState(query.priceTo || "");
   const [selectedFamilies, setSelectedFamilies] = useState(
@@ -144,7 +145,7 @@ export default function Buscar({ items, total, page, totalPages, query }) {
       nextSort: "price_asc",
     });
   };
-  
+
   return (
     <>
       <Head>
@@ -169,11 +170,45 @@ export default function Buscar({ items, total, page, totalPages, query }) {
 
         <h1 className="text-xl font-semibold">Resultados</h1>
 
+        {/* Controles superiores (orden + botón filtros en mobile) */}
+        <div className="flex items-center justify-between md:justify-end gap-3">
+          {/* Botón Filtros sólo mobile */}
+          <button
+            className="md:hidden inline-flex items-center gap-2 border rounded px-3 py-2 text-sm"
+            onClick={() => setOpenFilters(true)}
+            aria-expanded={openFilters}
+            aria-controls="mobile-filters"
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M3 5h18v2H3V5zm4 6h10v2H7v-2zm-2 6h14v2H5v-2z" />
+            </svg>
+            Filtros
+          </button>
+
+          {/* Ordenar (tu select) */}
+          <div className="flex items-center">
+            <label className="text-sm text-gray-600 mr-2">Ordenar por:</label>
+            <select
+              className="rounded border px-2 py-1 text-sm"
+              value={sort}
+              onChange={(e) => {
+                setSort(e.target.value);
+                pushWith({ nextSort: e.target.value });
+              }}
+            >
+              <option value="price_asc">Precio: menor a mayor</option>
+              <option value="price_desc">Precio: mayor a menor</option>
+              <option value="alpha_asc">Alfabético: A → Z</option>
+            </select>
+          </div>
+        </div>
+
         {/* <ProductGrid items={items} loading={loading} /> */}
 
         {/* Layout con sidebar a la izquierda */}
         <div className="flex gap-6">
           <FilterSidebar
+            className="hidden md:block" // ← sidebar sólo en md+
             families={familiesFromItems.map((f) => ({
               id: f.id,
               title: f.title,
@@ -249,6 +284,64 @@ export default function Buscar({ items, total, page, totalPages, query }) {
           </div>
         </div>
       </main>
+      {/* Drawer de filtros para mobile */}
+      {openFilters && (
+        <div
+          id="mobile-filters"
+          className="fixed inset-0 z-40 md:hidden"
+          role="dialog"
+          aria-modal="true"
+        >
+          {/* Backdrop */}
+          <div
+            className="absolute left-0 right-0 bottom-0 top-14 md:top-0 bg-black/40"
+            onClick={() => setOpenFilters(false)}
+          />
+
+          {/* Panel */}
+          <div className="absolute left-0 bottom-0 top-14 md:top-0 w-[85%] max-w-[360px] bg-gray-100 shadow-xl flex flex-col rounded-r-lg">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h2 className="font-semibold">Filtros</h2>
+              <button aria-label="Cerrar" onClick={() => setOpenFilters(false)}>
+                ✕
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-4 grow">
+              <FilterSidebar
+                families={familiesFromItems.map((f) => ({
+                  id: f.id,
+                  title: f.title,
+                }))}
+                facets={facets}
+                selectedFamilies={selectedFamilies}
+                selectedSubattrs={selectedSubattrs}
+                priceMin={priceMin}
+                priceMax={priceMax}
+                onCommitPrice={(minStr, maxStr) => {
+                  setPriceMin(minStr);
+                  setPriceMax(maxStr);
+                  pushWith({ nextPriceMin: minStr, nextPriceMax: maxStr });
+                }}
+                onToggleFamily={toggleFamily}
+                onToggleSubattr={toggleSubattr}
+                onClearAll={clearAll}
+                priceBounds={priceBounds}
+              />
+            </div>
+
+            <div className="p-4">
+              <button
+                className="w-full bg-black text-white rounded px-4 py-2"
+                onClick={() => setOpenFilters(false)}
+              >
+                Aplicar filtros
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Footer />
     </>
   );
@@ -256,17 +349,23 @@ export default function Buscar({ items, total, page, totalPages, query }) {
 
 // ── helpers para normalizar ───────────────────────────────────────────────
 const _normalize = (s = "") =>
-  s.toString().toLowerCase()
-   .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-   .replace(/\s+/g, " ").trim();
+  s
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 const _slugify = (s = "") =>
-  _normalize(s).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  _normalize(s)
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 // Ocultar “LOGO 24” y variantes habituales (sirve con título o slug)
 function hideFamily(titleOrSlug = "") {
-  const n = _normalize(titleOrSlug);   // ej: "logo 24 hs"
-  const sl = _slugify(titleOrSlug);     // ej: "logo-24hs"
+  const n = _normalize(titleOrSlug); // ej: "logo 24 hs"
+  const sl = _slugify(titleOrSlug); // ej: "logo-24hs"
   return (
     n.includes("logo 24") ||
     n.includes("logo24") ||
@@ -283,7 +382,10 @@ const toArray = (v) =>
     ? []
     : Array.isArray(v)
     ? v
-    : String(v).split(",").map((s) => s.trim()).filter(Boolean);
+    : String(v)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
 
 // SSR – llama al backend público
 export async function getServerSideProps(ctx) {
@@ -322,7 +424,7 @@ export async function getServerSideProps(ctx) {
     ? sub
         .split(",")
         .map((s) => s.trim())
-        .filter((t)=> !hideFamily(t))
+        .filter((t) => !hideFamily(t))
     : [];
 
   // if (subattribute) {

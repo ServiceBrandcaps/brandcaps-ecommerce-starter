@@ -80,7 +80,7 @@ export default function HomePage({ productos }) {
         {/* Productos Destacados */}
         <section>
           <h2 className="text-2xl font-bold mb-4">Productos Destacados</h2>
-          <ProductCarousel productos={productos}  variant="compact"/>
+          <ProductCarousel productos={productos}/>
         </section>
 
         {/* Sección de promociones */}
