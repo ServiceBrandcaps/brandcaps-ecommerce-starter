@@ -47,6 +47,27 @@ const normalizeSizeValue = (s) => {
   return s;
 };
 
+// — helpers para ocultar LOGO 24 y limpiar textos —
+const _normalize = (s = "") =>
+  s.toString().trim().toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+const _slugify = (s = "") =>
+  _normalize(s).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+const hideLogo24 = (txt = "") => {
+  const n = _normalize(txt);
+  const sl = _slugify(txt);
+  return (
+    n.includes("logo 24") ||
+    n.includes("logo24") ||
+    /logueo\s*en\s*24/.test(n) ||
+    sl === "logo-24" || sl === "logo-24hs" || sl === "logo24" || sl.startsWith("logo-24")
+  );
+};
+
+const cleanText = (t = "") =>
+  t.split(/\r?\n/).filter(line => !hideLogo24(line)).join("\n");
+
 // Set de colores conocidos = (colores de variantes) + una lista base
 const knownColorSet = useMemo(() => {
   const set = new Set();
@@ -265,9 +286,10 @@ const needsSize = !isAchromaticCurrent && hasMultipleSizes;
     Number.isFinite(qtyNum) && qtyNum > 0 && qtyNum < minimumOrder;
 
   // Datos varios
-  const description = producto.description || "Sin descripción";
+  const description =cleanText(producto.description || "Sin descripción");
+  const uniq = (arr) => [...new Set(arr)];
   const printingTypes = producto.printing_types?.length
-    ? producto.printing_types.map((py) => py.description).join(", ")
+    ? uniq(producto.printing_types.map((py) => py.name)).filter(Boolean).join(", ")
     : "No disponible";
 
   const dims = producto.dimensions || {};
