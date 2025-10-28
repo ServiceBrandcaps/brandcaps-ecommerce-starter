@@ -23,81 +23,248 @@ export default function ProductDetail({ producto }) {
   //   : producto?.variants ?? [];
   // const [variant, setVariant] = useState(variants[0] ?? null);
   // Variantes crudas (cada item puede tener color/size)
-  const rawVariants = useMemo(
-    () =>
-      brandcapsProduct ? producto?.products ?? [] : producto?.variants ?? [],
-    [brandcapsProduct, producto?.products, producto?.variants]
-  );
 
   // Helpers para leer color/talle según origen
   const normText = (s) => (typeof s === "string" ? s.trim() : s ?? "");
   const normKey = (s) =>
-  normText(s)?.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") || "";
-  const getColor = (v) =>
-    brandcapsProduct ? normText(v?.color) : normText(v?.elementDescription2);
-  const getSize = (v) =>
-    brandcapsProduct ? normText(v?.size) : normText(v?.elementDescription1);
+    normText(s)
+      ?.toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") || "";
+  // --- DICCIONARIO de colores (normalizados, incluye multi-palabra) ---
+  const COLOR_WORDS = [
+    "blanco",
+    "negro",
+    "gris",
+    "gris oscuro",
+    "gris claro",
+    "grafito",
+    "plateado",
+    "plata",
+    "dorado",
+    "oro",
+    "natural",
+    "beige",
+    "marron",
+    "cafe",
+    "rojo",
+    "bordo",
+    "vino",
+    "rosa",
+    "fucsia",
+    "violeta",
+    "morado",
+    "lila",
+    "azul",
+    "azul marino",
+    "azul francia",
+    "celeste",
+    "turquesa",
+    "verde",
+    "verde manzana",
+    "verde agua",
+    "naranja",
+    "amarillo",
+    "transparente",
+    "transp",
+    "kaki",
+  ].map((s) => s.toLowerCase());
 
-    // tratar valores "no talle" o que son en realidad un color
-const normalizeSizeValue = (s) => {
-  const t = normKey(s);
-  if (!t || t === "-" || t === "—") return "";
-  if (["X small","Small","Medium","Large","X Large","XX Large","3 X Large","4 X Large", "2 X Large"].includes(t)) return "";
-  if (isLikelyColor(t)) return ""; // <- clave: descarta colores colados en ED1
-  return s;
-};
+  // Detecta todas las frases de color presentes en un texto ya normalizado
+  const pickColorsFrom = (normalizedText) => {
+    if (!normalizedText) return [];
+    const found = [];
+    for (const w of COLOR_WORDS) {
+      if (normalizedText.includes(w) && !found.includes(w)) found.push(w);
+    }
+    // también soporta combos "blanco/negro", "blanco - negro", etc.
+    const tokens = normalizedText.split(/[\s,/;+|-]+/g).filter(Boolean);
+    tokens.forEach((tk) => {
+      if (COLOR_WORDS.includes(tk) && !found.includes(tk)) found.push(tk);
+    });
+    return found;
+  };
 
-// — helpers para ocultar LOGO 24 y limpiar textos —
-const _normalize = (s = "") =>
-  s.toString().trim().toLowerCase()
-    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-const _slugify = (s = "") =>
-  _normalize(s).replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-
-const hideLogo24 = (txt = "") => {
-  const n = _normalize(txt);
-  const sl = _slugify(txt);
-  return (
-    n.includes("logo 24") ||
-    n.includes("logo24") ||
-    /logueo\s*en\s*24/.test(n) ||
-    sl === "logo-24" || sl === "logo-24hs" || sl === "logo24" || sl.startsWith("logo-24")
+  // Patrones razonables de talles/medidas
+  const SIZE_RE = new RegExp(
+    [
+      "\\b(xs|s|m|l|xl|xxl|xxxl|x small|small|medium|large|x large|xx large|3 x large|4 x large)\\b",
+      "\\btalle\\s*\\d{1,3}\\b", // "talle 40"
+      "\\b\\d{1,3}\\s*(cm|mm|mts|m)\\b", // "19 cm", "200 mm"
+      "\\b\\d{2,4}\\s*(ml|lts|l|oz)\\b", // "500 ml", "1 l", "12 oz"
+      "\\b\\d{1,2}\\s*-\\s*\\d{1,2}\\b", // "39-42"
+    ].join("|"),
+    "i"
   );
-};
 
-const cleanText = (t = "") =>
-  t.split(/\r?\n/).filter(line => !hideLogo24(line)).join("\n");
+  // Parseo robusto desde ED1/ED2/ED3 para Zecat
+  const parseZecatVariant = (v) => {
+    const ed1 = normText(v?.elementDescription1);
+    const ed2 = normText(v?.elementDescription2);
+    const ed3 = normText(v?.elementDescription3);
+    const n1 = normKey(ed1),
+      n2 = normKey(ed2),
+      n3 = normKey(ed3);
 
-// Set de colores conocidos = (colores de variantes) + una lista base
-const knownColorSet = useMemo(() => {
-  const set = new Set();
-  (rawVariants || []).forEach((v) => {
-    const c = normKey(getColor(v));
-    if (c) set.add(c);
-  });
-  // fallback común en español
-  [
-    "blanco","negro","rojo","azul","verde","amarillo","gris","plateado","plata","dorado",
-    "oro","marron","cafe","beige","violeta","morado","rosa","fucsia","celeste","turquesa",
-    "naranja","transparente","transp","grafito","natural","kaki"
-  ].forEach((c) => set.add(c));
-  return set;
-}, [rawVariants, brandcapsProduct, getColor, normKey]); // getColor depende de brandcapsProduct
+    // Colores: unión de coincidencias en los tres campos
+    const colParts = [
+      ...new Set([
+        ...pickColorsFrom(n1),
+        ...pickColorsFrom(n2),
+        ...pickColorsFrom(n3),
+      ]),
+    ];
+    const colorParsed = colParts
+      .map((w) => w.replace(/\b\w/g, (m) => m.toUpperCase())) // capitalizar
+      .join(" / ");
 
- // pool actual (todas o filtradas por color seleccionado)
- const currentPool = useMemo(() => {
-   if (!selColor?.color) return rawVariants || [];
-   return (rawVariants || []).filter((v) => getColor(v) === selColor.color);
- }, [rawVariants, selColor, getColor]);
+    // Talle/medida: primer match claro en cualquiera
+    const sizeMatch =
+      (n1.match(SIZE_RE) && n1.match(SIZE_RE)[0]) ||
+      (n2.match(SIZE_RE) && n2.match(SIZE_RE)[0]) ||
+      (n3.match(SIZE_RE) && n3.match(SIZE_RE)[0]) ||
+      ""; // si nada, vacío
 
-const isLikelyColor = (val) => {
-  const n = normKey(val);
-  if (!n) return false;
-  if (knownColorSet.has(n)) return true;
-  // Maneja combos tipo "blanco/negro", "blanco - negro", etc.
-  return n.split(/[\/,\-+,; ]+/).some((tok) => knownColorSet.has(tok));
-};
+    // Si no encontramos size pero un campo NO parece color y parece ser talla, úsalo crudo
+    const fallbackSize =
+      !colorParsed && SIZE_RE.test(n1)
+        ? ed1
+        : !colorParsed && SIZE_RE.test(n2)
+        ? ed2
+        : !colorParsed && SIZE_RE.test(n3)
+        ? ed3
+        : "";
 
+    const sizeParsed = sizeMatch || fallbackSize || "";
+    return { colorParsed, sizeParsed };
+  };
+
+  // Variantes normalizadas: para Brandcaps usamos color/size; para Zecat usamos parseo EDx
+  const normalizedVariants = useMemo(() => {
+    const base = brandcapsProduct
+      ? producto?.products ?? []
+      : producto?.variants ?? [];
+    if (brandcapsProduct) return base;
+    return (base || []).map((v) => {
+      const { colorParsed, sizeParsed } = parseZecatVariant(v);
+      return { ...v, colorParsed, sizeParsed };
+    });
+  }, [brandcapsProduct, producto?.products, producto?.variants]);
+
+  // Lectores unificados
+  const getColor = (v) =>
+    brandcapsProduct ? normText(v?.color) : normText(v?.colorParsed);
+  const getSize = (v) =>
+    brandcapsProduct ? normText(v?.size) : normText(v?.sizeParsed);
+  const rawVariants = normalizedVariants; // ya viene parseado para Zecat
+
+  // tratar valores "no talle" o que son en realidad un color
+  const normalizeSizeValue = (s) => {
+    const t = normKey(s);
+    if (!t || t === "-" || t === "—") return "";
+    if (
+      [
+        "X small",
+        "Small",
+        "Medium",
+        "Large",
+        "X Large",
+        "XX Large",
+        "3 X Large",
+        "4 X Large",
+        "2 X Large",
+      ].includes(t)
+    )
+      return "";
+    if (isLikelyColor(t)) return ""; // si por error vino color, lo sacamos
+    return s;
+  };
+
+  // — helpers para ocultar LOGO 24 y limpiar textos —
+  const _normalize = (s = "") =>
+    s
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  const _slugify = (s = "") =>
+    _normalize(s)
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+  const hideLogo24 = (txt = "") => {
+    const n = _normalize(txt);
+    const sl = _slugify(txt);
+    return (
+      n.includes("logo 24") ||
+      n.includes("logo24") ||
+      /logueo\s*en\s*24/.test(n) ||
+      sl === "logo-24" ||
+      sl === "logo-24hs" ||
+      sl === "logo24" ||
+      sl.startsWith("logo-24")
+    );
+  };
+
+  const cleanText = (t = "") =>
+    t
+      .split(/\r?\n/)
+      .filter((line) => !hideLogo24(line))
+      .join("\n");
+
+  // Set de colores conocidos = (colores de variantes) + una lista base
+  const knownColorSet = useMemo(() => {
+    const set = new Set();
+    (rawVariants || []).forEach((v) => {
+      const c = normKey(getColor(v));
+      if (c) set.add(c);
+    });
+    // fallback común en español
+    [
+      "blanco",
+      "negro",
+      "rojo",
+      "azul",
+      "verde",
+      "amarillo",
+      "gris",
+      "plateado",
+      "plata",
+      "dorado",
+      "oro",
+      "marron",
+      "cafe",
+      "beige",
+      "violeta",
+      "morado",
+      "rosa",
+      "fucsia",
+      "celeste",
+      "turquesa",
+      "naranja",
+      "transparente",
+      "transp",
+      "grafito",
+      "natural",
+      "kaki",
+    ].forEach((c) => set.add(c));
+    return set;
+  }, [rawVariants, brandcapsProduct, getColor, normKey]); // getColor depende de brandcapsProduct
+
+  // pool actual (todas o filtradas por color seleccionado)
+  const currentPool = useMemo(() => {
+    if (!selColor?.color) return rawVariants || [];
+    return (rawVariants || []).filter((v) => getColor(v) === selColor.color);
+  }, [rawVariants, selColor, getColor]);
+
+  const isLikelyColor = (val) => {
+    const n = normKey(val);
+    if (!n) return false;
+    if (knownColorSet.has(n)) return true;
+    // Maneja combos tipo "blanco/negro", "blanco - negro", etc.
+    return n.split(/[\/,\-+,; ]+/).some((tok) => knownColorSet.has(tok));
+  };
 
   // ¿todas/alguna variante es acromática?
   const isAchromaticGlobal = useMemo(() => {
@@ -161,17 +328,17 @@ const isLikelyColor = (val) => {
     return [...m.values()];
   }, [rawVariants, brandcapsProduct, getColor]);
 
-const sizeOptions = useMemo(() => {
-  const m = new Map();
-  for (const v of currentPool) {
-    const s = normalizeSizeValue(getSize(v)); // <- ya filtra colores/único/etc.
-    if (!s) continue;
-    const prev = m.get(s) || { id: `size-${s}`, size: s, stock: 0 };
-    prev.stock += Number(v?.stock ?? 0);
-    m.set(s, prev);
-  }
-  return [...m.values()];
-}, [currentPool, getSize, normalizeSizeValue]);
+  const sizeOptions = useMemo(() => {
+    const m = new Map();
+    for (const v of currentPool) {
+      const s = normalizeSizeValue(getSize(v)); // <- ya filtra colores/único/etc.
+      if (!s) continue;
+      const prev = m.get(s) || { id: `size-${s}`, size: s, stock: 0 };
+      prev.stock += Number(v?.stock ?? 0);
+      m.set(s, prev);
+    }
+    return [...m.values()];
+  }, [currentPool, getSize, normalizeSizeValue]);
 
   // Preseleccionar la primera opción disponible cuando cambian las listas
   useEffect(() => {
@@ -188,7 +355,6 @@ const sizeOptions = useMemo(() => {
         : sizeOptions[0] || null
     );
   }, [sizeOptions]);
-
 
   // Buscar la variante concreta que matchea color+talle (si existen)
   useEffect(() => {
@@ -265,13 +431,13 @@ const sizeOptions = useMemo(() => {
   // Debe existir una variante válida y cantidad válida
   const needsColor = colorOptions.length > 0;
   //const needsSize = !isAchromaticCurrent && sizeOptions.length > 0;
-const distinctSizesCurrent = useMemo(() => {
-  const set = new Set();
-  sizeOptions.forEach((o) => set.add(normKey(o.size)));
-  return set;
-}, [sizeOptions, normKey]);
-const hasMultipleSizes = distinctSizesCurrent.size > 1;
-const needsSize = !isAchromaticCurrent && hasMultipleSizes;
+  const distinctSizesCurrent = useMemo(() => {
+    const set = new Set();
+    sizeOptions.forEach((o) => set.add(normKey(o.size)));
+    return set;
+  }, [sizeOptions, normKey]);
+  const hasMultipleSizes = distinctSizesCurrent.size > 1;
+  const needsSize = !isAchromaticCurrent && hasMultipleSizes;
 
   const selectionComplete =
     (!needsColor || !!selColor) && (!needsSize || !!selSize) && !!variant;
@@ -286,10 +452,12 @@ const needsSize = !isAchromaticCurrent && hasMultipleSizes;
     Number.isFinite(qtyNum) && qtyNum > 0 && qtyNum < minimumOrder;
 
   // Datos varios
-  const description =cleanText(producto.description || "Sin descripción");
+  const description = cleanText(producto.description || "Sin descripción");
   const uniq = (arr) => [...new Set(arr)];
   const printingTypes = producto.printing_types?.length
-    ? uniq(producto.printing_types.map((py) => py.name)).filter(Boolean).join(", ")
+    ? uniq(producto.printing_types.map((py) => py.name))
+        .filter(Boolean)
+        .join(", ")
     : "No disponible";
 
   const dims = producto.dimensions || {};
@@ -404,11 +572,11 @@ const needsSize = !isAchromaticCurrent && hasMultipleSizes;
   };
 
   console.debug({
-  sizesLen: sizeOptions.length,
-  isA_global: isAchromaticGlobal,
-  selColor: selColor?.color,
-  isA_current: isAchromaticCurrent,
-});
+    sizesLen: sizeOptions.length,
+    isA_global: isAchromaticGlobal,
+    selColor: selColor?.color,
+    isA_current: isAchromaticCurrent,
+  });
 
   return (
     <>
