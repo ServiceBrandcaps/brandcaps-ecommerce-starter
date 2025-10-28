@@ -2,114 +2,93 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-/**
- * Variants (ejemplo) esperadas:
- * [
- *   { id, sku, stock, color, size, material?, achromatic? }
- * ]
- */
 export default function VariantSelect({
   variants = [],
-  value, // variante seleccionada (obj) opcional
-  onChange, // (variant) => void
+  value,                 // objeto seleccionado (del padre)
+  onChange,              // (variant) => void
   className = "",
   label = "Variante",
   placeholder = "Elige una opción",
   IsBrandcapsProduct,
-  opt = "color",
-  achromaticMode = false, // 👈 NUEVO
+  opt = "color",         // "color" | "size" | "material"
+  achromaticMode = false,
 }) {
-  const [selected, setSelected] = useState(value || null);
+  // Guardamos el ÍNDICE seleccionado (no el objeto)
+  const [selectedIdx, setSelectedIdx] = useState(-1);
 
-  // // Elige la primera variante con stock>0 por defecto
-  // useEffect(() => {
-  //   if (!variants?.length) {
-  //     setSelected(null);
-  //     return;
-  //   }
-  //   if (!selected) {
-  //     const withStock = variants.find((v) => Number(v?.stock) > 0);
-  //     setSelected(withStock || variants[0]);
-  //     onChange?.(withStock || variants[0]);
-  //   }
-  //   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // }, [variants]);
-
-  // 🔧 sync cuando cambia `value` desde el padre
-  useEffect(() => {
-    setSelected(value || null);
-  }, [value]);
-
-  // Mapea las etiquetas de las variantes
+  // Armar etiquetas visibles
   const options = useMemo(() => {
     return (variants || []).map((v, idx) => {
       const parts = [];
-      //console.log(v);
       if (!IsBrandcapsProduct) {
-        // 👇 En modo achromatic y desplegable de color: concatenamos ED1+ED2+ED3
-        if (achromaticMode && opt === "color") {
-          if (v?.elementDescription1) parts.push(v.elementDescription1);
-          if (v?.elementDescription2) parts.push(v.elementDescription2);
-          if (v?.elementDescription3) parts.push(v.elementDescription3);
-        } else {
-          if (opt == "size" && v?.elementDescription1)
-            parts.push(v.elementDescription1);
-          if (opt == "color" && v?.elementDescription2)
-            parts.push(v.elementDescription2);
-          if (opt == "material" && v?.elementDescription3)
-            parts.push(v.elementDescription3);
-        }
+        if (opt === "color" && v?.colorParsed) parts.push(v.colorParsed);
+        if (opt === "size"  && v?.sizeParsed)  parts.push(v.sizeParsed);
+        if (opt === "material" && v?.material) parts.push(v.material);
       } else {
-        // Brandcaps: usar v.color / v.size / v.material
         if (opt === "color" && v?.color) parts.push(v.color);
-        if (opt === "size" && v?.size) parts.push(v.size);
+        if (opt === "size"  && v?.size)  parts.push(v.size);
         if (opt === "material" && v?.material) parts.push(v.material);
       }
 
-      let sumStock = 0;
-      sumStock = typeof v?.stock === "number" ? v?.stock + sumStock : v?.stock;
-
       const stockTxt =
-        typeof sumStock === "number"
-          ? `${sumStock.toLocaleString("es-AR")} un.`
-          : sumStock
-          ? `${sumStock} un.`
-          : "—";
-      // const stockTxt =
-      //   typeof v?.stock === "number"
-      //     ? `${v.stock.toLocaleString("es-AR")} un.`
-      //     : v?.stock
-      //     ? `${v.stock} un.`
-      //     : "—";
-      //console.log(parts);
+        typeof v?.stock === "number"
+          ? `${v.stock.toLocaleString("es-AR")} un.`
+          : v?.stock ? `${v.stock} un.` : "—";
+
       const uniq = (arr) => [...new Set(arr)];
-      const all = uniq(parts.map((p) => p).filter(Boolean));
-      //console.log(all);
+      const all = uniq(parts.filter(Boolean));
+
       return {
         key: v?.id ?? v?.sku ?? idx,
-        label: `${all.filter(Boolean).join(" - ") || "Variante"} - ${stockTxt}`, //v?.sku ||
-        value: idx, // usamos el índice para luego recuperar el objeto
-        disabled: Number(v?.stock) <= 0,
+        label: `${all.join(" - ") || "Variante"} - ${stockTxt}`,
+        value: String(idx),   // el select trabaja mejor con string
         raw: v,
+        disabled: Number(v?.stock) <= 0,
       };
     });
   }, [variants, opt, IsBrandcapsProduct]);
 
-  const handleChange = (e) => {
-    const idx = Number(e.target.value);
-    const v = variants[idx] || null;
-    setSelected(v);
-    onChange?.(v);
+  // Buscar índice del "value" que viene del padre (por id/sku/campo lógico)
+  const computeIndexFromValue = () => {
+    if (!value || !variants?.length) return -1;
+
+    const same = (a, b) => {
+      if (!a || !b) return false;
+      if (a.id && b.id && a.id === b.id) return true;
+      if (a.sku && b.sku && a.sku === b.sku) return true;
+      // comparación por campo lógico
+      if (opt === "color" && a.color && b.color && a.color === b.color) return true;
+      if (opt === "size"  && a.size  && b.size  && a.size  === b.size)  return true;
+      if (opt === "material" && a.material && b.material && a.material === b.material) return true;
+      return false;
+    };
+
+    const idx = variants.findIndex((v) => same(v, value));
+    return idx >= 0 ? idx : -1;
   };
 
-  //console.log(options);
+  // Sincronizar cuando cambian `value` o `variants`
+  useEffect(() => {
+    const idx = computeIndexFromValue();
+    setSelectedIdx(idx);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value, variants, opt]);
+
+  // Manejar cambio del select
+  const handleChange = (e) => {
+    const idx = Number(e.target.value);
+    setSelectedIdx(idx);
+    onChange?.(variants[idx] || null);
+  };
+
+  const current = selectedIdx >= 0 ? variants[selectedIdx] : null;
 
   return (
     <div className={className}>
       <label className="block mb-2 font-medium">{label}</label>
       <select
         className="w-full border rounded p-2"
-        value={selected ? variants.findIndex((v) => v === selected) ?? "" : ""}
+        value={selectedIdx >= 0 ? String(selectedIdx) : ""}
         onChange={handleChange}
       >
         <option value="" disabled>
@@ -122,11 +101,10 @@ export default function VariantSelect({
         ))}
       </select>
 
-      {/* Info auxiliar */}
-      {selected && (
+      {current && (
         <p className="text-sm text-gray-600 mt-2">
-          SKU: <span className="font-mono">{selected.sku || "—"}</span> · Stock:{" "}
-          {Number(selected.stock || 0).toLocaleString("es-AR")}
+          SKU: <span className="font-mono">{current.sku || "—"}</span> · Stock:{" "}
+          {Number(current.stock || 0).toLocaleString("es-AR")}
         </p>
       )}
     </div>
