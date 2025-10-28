@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
-import PriceRangeSlider from "./filters/PriceRangeSlider";
+import Slider from "rc-slider";
 import { FunnelIcon } from "@heroicons/react/24/solid";
+import "rc-slider/assets/index.css";
 
 export default function FilterSidebar({
   families = [],
@@ -17,11 +18,6 @@ export default function FilterSidebar({
   onClearAll,
   className = "",
 }) {
-  const moneyAR = (n) =>
-    new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: "ARS",
-    }).format(Number(n || 0));
   // --- estado local de inputs/slider (edición sin aplicar) ---
   const [localMin, setLocalMin] = useState(
     priceMin === "" ? priceBounds.min : Number(priceMin)
@@ -34,6 +30,7 @@ export default function FilterSidebar({
   useEffect(() => {
     setLocalMin(priceMin === "" ? priceBounds.min : Number(priceMin));
   }, [priceMin, priceBounds.min]);
+
   useEffect(() => {
     setLocalMax(priceMax === "" ? priceBounds.max : Number(priceMax));
   }, [priceMax, priceBounds.max]);
@@ -47,10 +44,6 @@ export default function FilterSidebar({
     onCommitPrice?.(sendMin, sendMax);
   };
 
-  const onKeyDownCommit = (e) => {
-    if (e.key === "Enter") commitPrice(localMin, localMax);
-  };
-
   const Section = ({ title, children }) => (
     <section>
       <h3 className="text-sm font-semibold mb-2">{title}</h3>
@@ -58,15 +51,44 @@ export default function FilterSidebar({
     </section>
   );
 
+  // --- helpers para normalizar/slugificar y ocultar LOGO 24 ---
+  const _normalize = (s = "") =>
+    s
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, ""); // quita tildes
+
+  const _slugify = (s = "") =>
+    _normalize(s)
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+  function hideFamily(titleOrSlug = "") {
+    const n = _normalize(titleOrSlug); // ej: "logo 24 hs"
+    const sl = _slugify(titleOrSlug); // ej: "logo-24hs"
+    return (
+      n.includes("logo 24") ||
+      n.includes("logo24") ||
+      sl === "logo-24" ||
+      sl === "logo-24hs" ||
+      sl === "logo24" ||
+      sl.startsWith("logo-24")
+    );
+  }
+
   return (
-    <aside className={`w-full md:w-[280px] shrink-0 ${className} bg-gray-100 p-4 md:p-5 md:mt-7 rounded md:rounded`}>
+    <aside
+      className={`w-full md:w-[280px] shrink-0 ${className} bg-gray-100 p-4 md:p-5 md:mt-7 rounded md:rounded`}
+    >
       <div className="md:sticky md:top-20 space-y-6">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-medium">Filtros</h2>
           <button
             type="button"
             onClick={onClearAll}
-            className=" border-black border-1  bg-white hover:bg-gray-200 text-black px-1 py-1 rounded cursor-pointer transition duration-200 flex items-center "
+            className="border-black border-1 bg-white hover:bg-gray-200 text-black px-1 py-1 rounded cursor-pointer transition duration-200 flex items-center"
           >
             <FunnelIcon className="h-3 w-3 inline-block" />
           </button>
@@ -74,170 +96,114 @@ export default function FilterSidebar({
 
         {/* Precio */}
         <section>
-          <h3 className="text-sm font-semibold mb-2">Filtrar por precios</h3>
+          <p className="text-sm font-medium mb-2">Filtrar por precios</p>
 
-          <PriceRangeSlider
-            min={priceBounds.min}
-            max={priceBounds.max}
-            step={priceBounds.step}
-            valueMin={localMin}
-            valueMax={localMax}
-            onChange={(a, b) => {
-              setLocalMin(clamp(a, priceBounds.min, localMax));
-              setLocalMax(clamp(b, localMin, priceBounds.max));
-            }}
-            onCommit={(a, b) => commitPrice(a, b)}
-          />
-
-          <div className="mt-3 flex items-center gap-2">
+          {/* inputs numéricos: editan local y confirman con Enter/Blur */}
+          <div className="flex items-center gap-2 mb-3">
             <input
               type="number"
               inputMode="numeric"
-              min={priceBounds.min}
-              max={localMax}
+              className="w-full border rounded px-2 py-1 text-sm"
               placeholder="Desde"
-              className="w-28 rounded border px-2 py-1 text-sm bg-white"
               value={localMin}
-              onChange={(e) => setLocalMin(clamp(Number(e.target.value), priceBounds.min, localMax))}
+              onChange={(e) => {
+                const v = Number(e.target.value || 0);
+                // no permitir pasar el max
+                setLocalMin(clamp(v, priceBounds.min, localMax));
+              }}
               onBlur={() => commitPrice(localMin, localMax)}
-              onKeyDown={onKeyDownCommit}
+              onKeyDown={(e) =>
+                e.key === "Enter" && commitPrice(localMin, localMax)
+              }
             />
-            <span className="text-gray-500">—</span>
+            <span className="text-gray-400">—</span>
             <input
               type="number"
               inputMode="numeric"
-              min={localMin}
-              max={priceBounds.max}
+              className="w-full border rounded px-2 py-1 text-sm"
               placeholder="Hasta"
-              className="w-28 rounded border px-2 py-1 text-sm  bg-white"
               value={localMax}
-              onChange={(e) => setLocalMax(clamp(Number(e.target.value), localMin, priceBounds.max))}
+              onChange={(e) => {
+                const v = Number(e.target.value || 0);
+                // no permitir bajar del min
+                setLocalMax(clamp(v, localMin, priceBounds.max));
+              }}
               onBlur={() => commitPrice(localMin, localMax)}
-              onKeyDown={onKeyDownCommit}
+              onKeyDown={(e) =>
+                e.key === "Enter" && commitPrice(localMin, localMax)
+              }
             />
           </div>
 
-          <p className="mt-2 text-xs text-gray-500">
-            Actual: {priceMin === "" ? "—" : moneyAR(priceMin)} — {priceMax === "" ? "—" : moneyAR(priceMax)}
-          </p>
+          {/* slider (dual-handle): mueve local; confirma al SOLTAR */}
+          <div className="px-1 md:px-0">
+            <Slider
+              range
+              allowCross={false}
+              step={1}
+              min={priceBounds?.min ?? 0}
+              max={priceBounds?.max ?? 100000}
+              value={[localMin, localMax]}
+              onChange={(vals) => {
+                const [min, max] = vals;
+                setLocalMin(min);
+                setLocalMax(max);
+              }}
+              onChangeComplete={(vals) => {
+                const [min, max] = vals;
+                commitPrice(min, max);
+              }}
+              handleStyle={[
+                { borderColor: "#000", backgroundColor: "#000" },
+                { borderColor: "#000", backgroundColor: "#000" },
+              ]}
+              trackStyle={[{ backgroundColor: "#000", height: 6 }]}
+              railStyle={{ backgroundColor: "#e5e7eb", height: 6 }}
+              className="py-2"
+            />
+            <div className="mt-1 text-xs text-gray-500">
+              Actual: ${localMin.toLocaleString()} — $
+              {localMax.toLocaleString()}
+            </div>
+          </div>
         </section>
 
         {/* Familias */}
         <Section title="Categorías del producto">
-          <div className="max-h-64 overflow-auto pr-1 space-y-2">
+          <div className="h-full overflow-auto pr-1 space-y-2">
             {families.length === 0 && (
               <p className="text-xs text-gray-500">
                 Sin categorías disponibles.
               </p>
             )}
-            {families.map((f) => {
-              const id = String(f.id ?? f._id ?? f.value);
-              const title = String(f.title ?? f.description);
-              const label =
-                f.description || f.title || f.name || `Familia ${id}`;
-              const checked = selectedFamilies.includes(title);
-              return (
-                <label key={id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="accent-black"
-                    checked={checked}
-                    onChange={() => onToggleFamily?.(title)}
-                  />
-                  <span className="truncate">{label}</span>
-                </label>
-              );
-            })}
+            {families
+              .filter((f) => {
+                const title = String(f.title ?? f.description ?? f.name ?? "");
+                const slug = String(f.slug ?? "");
+                return !hideFamily(title || slug);
+              })
+              .map((f) => {
+                const id = String(f.id ?? f._id ?? f.value);
+                const title = String(
+                  f.title ?? f.description ?? f.name ?? `Familia ${id}`
+                );
+                const checked = selectedFamilies.includes(title);
+                return (
+                  <label key={id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      className="accent-black"
+                      checked={checked}
+                      onChange={() => onToggleFamily?.(title)}
+                    />
+                    <span className="truncate">{title}</span>
+                  </label>
+                );
+              })}
           </div>
         </Section>
-        {/* Subatributos */}
-        {/* <Section title="Subatributos"> */}
-          {/* Colores */}
-          {/* {facets.colors?.length > 0 && (
-            <div className="mb-3">
-              <p className="text-xs font-medium mb-1 text-gray-600">Color</p>
-              <div className="space-y-1 max-h-40 overflow-auto pr-1">
-                {facets.colors.map(({ value }) => {
-                  const checked = selectedSubattrs.some(
-                    (e) => e.key === "colors" && e.value === value
-                  );
-                  return (
-                    <label
-                      key={`color-${value}`}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        className="accent-black"
-                        checked={checked}
-                        onChange={() => onToggleSubattr?.("colors", value)}
-                      />
-                      <span className="truncate">{value}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )} */}
 
-          {/* Material */}
-          {/* {facets.materials?.length > 0 && (
-            <div className="mb-3">
-              <p className="text-xs font-medium mb-1 text-gray-600">Material</p>
-              <div className="space-y-1 max-h-40 overflow-auto pr-1">
-                {facets.materials.map(({ value }) => {
-                  const checked = selectedSubattrs.some(
-                    (e) => e.key === "material" && e.value === value
-                  );
-                  return (
-                    <label
-                      key={`mat-${value}`}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        className="accent-black"
-                        checked={checked}
-                        onChange={() => onToggleSubattr?.("material", value)}
-                      />
-                      <span className="truncate">{value}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )} */}
-
-          {/* Talle/Tamaño */}
-          {/* {facets.sizes?.length > 0 && (
-            <div className="mb-1">
-              <p className="text-xs font-medium mb-1 text-gray-600">
-                Talle / Tamaño
-              </p>
-              <div className="space-y-1 max-h-40 overflow-auto pr-1">
-                {facets.sizes.map(({ value }) => {
-                  const checked = selectedSubattrs.some(
-                    (e) => e.key === "size" && e.value === value
-                  );
-                  return (
-                    <label
-                      key={`size-${value}`}
-                      className="flex items-center gap-2 text-sm"
-                    >
-                      <input
-                        type="checkbox"
-                        className="accent-black"
-                        checked={checked}
-                        onChange={() => onToggleSubattr?.("size", value)}
-                      />
-                      <span className="truncate">{value}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            </div>
-          )} */}
-        {/* </Section> */}
+        {/* (Subatributos comentados como en tu archivo) */}
       </div>
     </aside>
   );

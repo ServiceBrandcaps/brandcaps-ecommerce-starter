@@ -38,7 +38,14 @@ function buildFacets(products) {
   };
 }
 
-export default function Buscar({ items, total, page, totalPages, query }) {
+export default function Buscar({
+  items,
+  total,
+  page,
+  totalPages,
+  query,
+  priceBounds: boundsFromServer,
+}) {
   const loading = false;
   const router = useRouter();
 
@@ -57,7 +64,8 @@ export default function Buscar({ items, total, page, totalPages, query }) {
   const minP = prices.length ? Math.max(0, Math.floor(Math.min(...prices))) : 0;
   const maxP = prices.length ? Math.ceil(Math.max(...prices)) : 100000;
   const step = Math.max(1, Math.round((maxP - minP) / 100));
-  const priceBounds = { min: minP, max: maxP, step };
+  const computedBounds = { min: minP, max: maxP, step };
+  const priceBounds = boundsFromServer || computedBounds;
 
   // Subatributos: guardamos objetos { key, value }
   const [selectedSubattrs, setSelectedSubattrs] = useState(() => {
@@ -251,36 +259,34 @@ export default function Buscar({ items, total, page, totalPages, query }) {
             <ProductGrid items={items} loading={loading} />
           </div>
         </div>
+        {/* Paginación */}
+        <div className="mt-6 px-2 md:px-0 overflow-visible">
+          <div className="flex items-center gap-2">
+            <span className="text-sm">
+              Página {page} de {totalPages} — Total: {total}
+            </span>
 
-        <div className="flex items-center justify-between">
-          <span>
-            Página {page} de {totalPages} — Total: {total}
-          </span>
+            <div className="ml-auto flex items-center gap-2">
+              <button
+                className="inline-flex items-center rounded border px-3 py-1.5
+                   focus:outline-none focus-visible:outline-none
+                   ring-0 focus:ring-2 focus:ring-black"
+                disabled={page <= 1}
+                onClick={() => pushWith({ nextPage: page - 1 })}
+              >
+                ‹ Anterior
+              </button>
 
-          <div className="space-x-2">
-            <Link
-              href={{
-                pathname: "/search",
-                query: { ...query, page: Math.max(1, page - 1) },
-              }}
-              className={`px-3 py-1 rounded border ${
-                page <= 1 ? "pointer-events-none opacity-50" : ""
-              }`}
-            >
-              ‹ Anterior
-            </Link>
-
-            <Link
-              href={{
-                pathname: "/search",
-                query: { ...query, page: Math.min(totalPages, page + 1) },
-              }}
-              className={`px-3 py-1 rounded border ${
-                page >= totalPages ? "pointer-events-none opacity-50" : ""
-              }`}
-            >
-              Siguiente ›
-            </Link>
+              <button
+                className="inline-flex items-center rounded border px-3 py-1.5
+                   focus:outline-none focus-visible:outline-none
+                   ring-0 focus:ring-2 focus:ring-black"
+                disabled={page >= totalPages}
+                onClick={() => pushWith({ nextPage: page + 1 })}
+              >
+                Siguiente ›
+              </button>
+            </div>
           </div>
         </div>
       </main>
@@ -389,7 +395,6 @@ const toArray = (v) =>
 
 // SSR – llama al backend público
 export async function getServerSideProps(ctx) {
-  //const { q = "", family = "", sub = "", page = "1" } = ctx.query;
   const {
     q = "",
     family = "",
@@ -400,121 +405,186 @@ export async function getServerSideProps(ctx) {
     priceTo = "",
   } = ctx.query;
 
-  // Params que entiende la API pública: q, family, sub (multi), page, limit
-  const params = { page, limit: "24", sort };
-  if (priceFrom !== "") params.priceFrom = priceFrom;
-  if (priceTo !== "") params.priceTo = priceTo;
-  if (q) params.q = q; // <- usa q (también soporta name en la API)
-  //if (family) params.family = family;
+  const PAGE_SIZE = 24;
 
-  // normalizamos a array
-  // const famArray = Array.isArray(family)
-  //   ? family
-  //   : family
-  //   ? family
-  //       .split(",")
-  //       .map((s) => s.trim())
-  //       .filter(Boolean)
-  //   : [];
+  const toArray = (v) =>
+    Array.isArray(v)
+      ? v
+      : v
+      ? String(v)
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [];
+
+  const _normalize = (s = "") =>
+    s
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  const _slugify = (s = "") =>
+    _normalize(s)
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+  const hideFamily = (titleOrSlug = "") => {
+    const n = _normalize(titleOrSlug);
+    const sl = _slugify(titleOrSlug);
+    return (
+      n.includes("logo 24") ||
+      n.includes("logo24") ||
+      sl === "logo-24" ||
+      sl === "logo-24hs" ||
+      sl === "logo24" ||
+      sl.startsWith("logo-24")
+    );
+  };
+
   const famArray = toArray(family).filter((t) => !hideFamily(t));
+  const subArray = toArray(sub).filter((t) => !hideFamily(t));
 
-  const subArray = Array.isArray(sub)
-    ? sub
-    : sub
-    ? sub
-        .split(",")
-        .map((s) => s.trim())
-        .filter((t) => !hideFamily(t))
-    : [];
+  // --- helper: fetch con try/catch y timeout ---
+  const safeFetch = async (url, ms = 15000) => {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), ms);
+      const res = await fetch(url, { signal: ctrl.signal });
+      clearTimeout(t);
+      const ok = res.ok;
+      let json = null;
+      try {
+        json = await res.json();
+      } catch {
+        json = null;
+      }
+      return { ok, json, status: res.status };
+    } catch (err) {
+      console.error("[SSR search] safeFetch error", url, err?.message || err);
+      return { ok: false, json: null, status: 0 };
+    }
+  };
 
-  // if (subattribute) {
-  //   // soporta múltiples subatributos separados por coma
-  //   const arr = String(subattribute)
-  //     .split(",")
-  //     .map((s) => s.trim())
-  //     .filter(Boolean);
-  //   if (arr.length) params.sub = arr;   // <- la API lee getAll('sub')
-  // }
+  const priceOf = (p) => {
+    const v = Number(p?.salePrice ?? p?.price ?? p?.basePrice);
+    return Number.isFinite(v) ? v : Number.MAX_SAFE_INTEGER;
+  };
 
   try {
-    // Construimos la querystring soportando arrays
-    const usp = new URLSearchParams();
-    Object.entries(params).forEach(([k, v]) => {
-      if (Array.isArray(v)) v.forEach((x) => usp.append(k, x));
-      else usp.set(k, v);
-    });
-    famArray.forEach((f) => usp.append("family", f));
-    subArray.forEach((s) => usp.append("sub", s));
+    // params BASE sin page/limit
+    const base = new URLSearchParams();
+    if (q) base.set("q", q);
+    famArray.forEach((f) => base.append("family", f));
+    subArray.forEach((s) => base.append("sub", s));
+    if (priceFrom !== "") base.set("priceFrom", priceFrom);
+    if (priceTo !== "") base.set("priceTo", priceTo);
+    if (sort) base.set("sort", sort);
 
-    const url = `${API_BASE}/api/store/products?${usp.toString()}`;
-    const res = await fetch(url);
+    // 1) primera página para conocer total
+    const first = new URLSearchParams(base);
+    first.set("page", "1");
+    first.set("limit", String(PAGE_SIZE));
+    const firstUrl = `${API_BASE}/api/store/products?${first.toString()}`;
 
-    if (!res.ok) throw new Error(`API ${res.status}`);
+    const r1 = await safeFetch(firstUrl);
+    if (!r1.ok || !r1.json) {
+      console.error("[SSR search] first page failed", r1.status);
+      return {
+        props: {
+          items: [],
+          total: 0,
+          page: 1,
+          totalPages: 1,
+          query: {
+            q,
+            family: famArray,
+            sub: subArray,
+            sort,
+            priceFrom,
+            priceTo,
+          },
+          priceBounds: { min: 0, max: 100000, step: 1000 },
+        },
+      };
+    }
 
-    // La API devuelve: { items, total, page, totalPages }
-    const data = await res.json();
-    //console.log(data);
-    const priceOf = (p) => {
-      const v = Number(p?.salePrice ?? p?.price ?? p?.basePrice);
-      return Number.isFinite(v) ? v : Number.MAX_SAFE_INTEGER; // sin precio al final
+    const d1 = r1.json;
+    const apiTotalPages = Number.isFinite(+d1.totalPages) ? +d1.totalPages : 1;
+
+    // 2) restantes en paralelo
+    const fetchPage = async (p) => {
+      const usp = new URLSearchParams(base);
+      usp.set("page", String(p));
+      usp.set("limit", String(PAGE_SIZE));
+      const url = `${API_BASE}/api/store/products?${usp.toString()}`;
+      const r = await safeFetch(url);
+      return r.ok && r.json ? r.json : { items: [] };
     };
-    let items = (Array.isArray(data.items) ? data.items : []).slice();
 
-    // Filtro por rango de precio (fallback si el backend no lo hace)
+    let allItems = Array.isArray(d1.items) ? d1.items.slice() : [];
+    if (apiTotalPages > 1) {
+      const promises = [];
+      for (let p = 2; p <= apiTotalPages; p++) promises.push(fetchPage(p));
+      const pages = await Promise.all(promises);
+      for (const pg of pages)
+        if (Array.isArray(pg.items)) allItems = allItems.concat(pg.items);
+    }
+
+    // 3) filtros de precio locales (defensivos)
     const min = priceFrom === "" ? undefined : Number(priceFrom);
     const max = priceTo === "" ? undefined : Number(priceTo);
-    if (min !== undefined && Number.isFinite(min)) {
-      items = items.filter((p) => priceOf(p) >= min);
-    }
-    if (max !== undefined && Number.isFinite(max)) {
-      items = items.filter((p) => priceOf(p) <= max);
-    }
+    if (min !== undefined && Number.isFinite(min))
+      allItems = allItems.filter((p) => priceOf(p) >= min);
+    if (max !== undefined && Number.isFinite(max))
+      allItems = allItems.filter((p) => priceOf(p) <= max);
 
-    // Ordenamiento
-    if (sort === "price_desc") items.sort((a, b) => priceOf(b) - priceOf(a));
+    // 4) ordenar TODO el set
+    if (sort === "price_desc") allItems.sort((a, b) => priceOf(b) - priceOf(a));
     else if (sort === "alpha_asc")
-      items.sort((a, b) =>
+      allItems.sort((a, b) =>
         String(a?.name || a?.title || "").localeCompare(
           String(b?.name || b?.title || ""),
           "es"
         )
       );
-    else items.sort((a, b) => priceOf(a) - priceOf(b)); // price_asc por defecto
-    const safeTotal = Number.isFinite(Number(data.total))
-      ? Number(data.total)
+    else allItems.sort((a, b) => priceOf(a) - priceOf(b)); // price_asc por defecto
+
+    // 5) bounds de precio con TODO el set
+    const prices = allItems.map(priceOf).filter((n) => Number.isFinite(n));
+    const minP = prices.length
+      ? Math.max(0, Math.floor(Math.min(...prices)))
       : 0;
-    const safePage = Number.isFinite(Number(data.page))
-      ? Number(data.page)
-      : Number(page) || 1;
-    const safeTotalPages = Number.isFinite(Number(data.totalPages))
-      ? Number(data.totalPages)
-      : 1;
+    const maxP = prices.length ? Math.ceil(Math.max(...prices)) : 100000;
+    const step = Math.max(1, Math.round((maxP - minP) / 100));
+    const priceBounds = { min: minP, max: maxP, step };
+
+    // 6) paginar en memoria
+    const curPage = Math.max(1, Number(page) || 1);
+    const total = allItems.length;
+    const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+    const start = (curPage - 1) * PAGE_SIZE;
+    const items = allItems.slice(start, start + PAGE_SIZE);
 
     return {
       props: {
         items,
-        total: safeTotal,
-        page: safePage,
-        totalPages: Math.max(1, safeTotalPages),
-        query: {
-          q,
-          family: famArray,
-          sub: subArray,
-          sort,
-          priceFrom,
-          priceTo,
-        },
+        total,
+        page: Math.min(curPage, totalPages),
+        totalPages,
+        query: { q, family: famArray, sub: subArray, sort, priceFrom, priceTo },
+        priceBounds,
       },
     };
-  } catch {
-    // Fallbacks siempre serializables
+  } catch (err) {
+    console.error("[SSR search] fatal", err?.message || err);
     return {
       props: {
         items: [],
         total: 0,
         page: 1,
         totalPages: 1,
-        query: { q, family: [], sub: [] },
+        query: { q, family: famArray, sub: subArray, sort, priceFrom, priceTo },
+        priceBounds: { min: 0, max: 100000, step: 1000 },
       },
     };
   }
