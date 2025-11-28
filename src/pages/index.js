@@ -13,6 +13,7 @@ import DiscoverSection from "../components/DiscoverSection";
 import PromoSection from "../components/PromoSection";
 import Footer from "../components/Footer";
 import FloatingWhatsAppButton from "@/components/FloatingWhatsAppButton";
+import banners from "../../public/banners.json"
 
 /**
  * Carga productos desde TU API pública (no Zecat).
@@ -67,13 +68,7 @@ export default function HomePage({ productos }) {
         {/* Sección de promociones */}
         <section>
           <PromoSection
-            banners={[
-              {
-                id: "madre",
-                family: "Día de la madre",
-                image: "/banners/banner dia de la madre.webp",
-              },
-            ]}
+            banners={banners}
           />
         </section>
 
@@ -84,7 +79,7 @@ export default function HomePage({ productos }) {
         </section>
 
         {/* Sección de promociones */}
-        <section>
+        {/* <section>
           <PromoSection
             banners={[
               {
@@ -94,7 +89,7 @@ export default function HomePage({ productos }) {
               },
             ]}
           />
-        </section>
+        </section> */}
 
         {/* Los más buscados */}
         <section>

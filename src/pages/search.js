@@ -5,7 +5,7 @@ import { useRouter } from "next/router";
 import { API_BASE } from "@/lib/api";
 import NavBar from "@/components/NavBar";
 import ProductGrid from "@/components/ProductGrid";
-import PromoSection from "../components/PromoSection";
+// import PromoSection from "../components/PromoSection";
 import Footer from "@/components/Footer";
 import FilterSidebar from "@/components/FilterSidebar";
 
@@ -164,7 +164,7 @@ export default function Buscar({
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         {/* Sección de promociones */}
-        <section>
+        {/* <section>
           <PromoSection
             banners={[
               {
@@ -174,7 +174,7 @@ export default function Buscar({
               },
             ]}
           />
-        </section>
+        </section> */}
 
         <h1 className="text-xl font-semibold">Resultados</h1>
 
@@ -240,7 +240,7 @@ export default function Buscar({
           />
 
           <div className="flex-1 space-y-4">
-            <div className="flex items-center justify-end">
+            {/* <div className="flex items-center justify-end">
               <label className="text-sm text-gray-600 mr-2">Ordenar por:</label>
               <select
                 className="rounded border px-2 py-1 text-sm"
@@ -254,7 +254,7 @@ export default function Buscar({
                 <option value="price_desc">Precio: mayor a menor</option>
                 <option value="alpha_asc">Alfabético: A → Z</option>
               </select>
-            </div>
+            </div> */}
 
             <ProductGrid items={items} loading={loading} />
           </div>
@@ -407,15 +407,22 @@ export async function getServerSideProps(ctx) {
 
   const PAGE_SIZE = 24;
 
-  const toArray = (v) =>
-    Array.isArray(v)
-      ? v
-      : v
-      ? String(v)
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean)
-      : [];
+  // const toArray = (v) =>
+  //   Array.isArray(v)
+  //     ? v
+  //     : v
+  //     ? String(v)
+  //         .split(",")
+  //         .map((s) => s.trim())
+  //         .filter(Boolean)
+  //     : [];
+  // Acepta repetidos (?family=a&family=b) y valores simples con comas en el nombre sin partirlos.
+  const toArray = (v) => {
+    if (Array.isArray(v)) return v;
+    if (v === undefined || v === null) return [];
+    const s = String(v).trim();
+    return s ? [s] : [];
+  };
 
   const _normalize = (s = "") =>
     s

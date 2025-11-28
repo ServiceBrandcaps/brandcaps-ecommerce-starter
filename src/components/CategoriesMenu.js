@@ -79,7 +79,7 @@ export default function CategoriesMenu({ className = "" }) {
   // si tenés backend externo:
   const familiesUrl = apiBase
     ? `${apiBase}/api/store/families`
-    : "/api/families";
+    : "/api/store/families";
 
   useEffect(() => {
     const ac = new AbortController();

@@ -1,0 +1,17 @@
+[
+  {
+    "id": "regalos",
+    "family": "2025 Felices Fiestas",
+    "image": "/banners/temporada_regalos_2025_v2-copia.webp"
+  },
+  {
+    "id": "ecomerch",
+    "family": "Sustentables",
+    "image": "/banners/banner_merch_eco_v4-copia.webp"
+  },
+  {
+    "id": "mates",
+    "family": "Mates, termos y materas",
+    "image": "/banners/mates.webp"
+  }
+]

@@ -1,49 +1,110 @@
 // components/PromoSection.js
-import React from 'react';
-import Link from 'next/link';
+"use client";
+import React, { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import useEmblaCarousel from "embla-carousel-react";
+import Autoplay from "embla-carousel-autoplay";
 
-/**
- * PromoSection muestra tres banners clickeables con background-images.
- * Sin texto ni botones: solo imágenes de fondo y enlaces completos.
- */
-export default function PromoSection(props) {
-  const { banners = [] } = props || {};
+export default function PromoSection({ banners = [] }) {
+  // Cada banner: { id, image, href? , family? }
+  const slides = Array.isArray(banners) ? banners : [];
+  const [emblaRef, emblaApi] = useEmblaCarousel(
+    { loop: true, align: "start", dragFree: false, skipSnaps: false },
+    [Autoplay({ delay: 4000, stopOnInteraction: false })]
+  );
+  const [selected, setSelected] = useState(0);
+
+  const onSelect = useCallback(() => {
+    if (!emblaApi) return;
+    setSelected(emblaApi.selectedScrollSnap());
+  }, [emblaApi]);
+
+  const scrollTo = useCallback(
+    (i) => emblaApi && emblaApi.scrollTo(i),
+    [emblaApi]
+  );
+  const scrollPrev = useCallback(
+    () => emblaApi && emblaApi.scrollPrev(),
+    [emblaApi]
+  );
+  const scrollNext = useCallback(
+    () => emblaApi && emblaApi.scrollNext(),
+    [emblaApi]
+  );
+
+  useEffect(() => {
+    if (!emblaApi) return;
+    onSelect();
+    emblaApi.on("select", onSelect);
+    emblaApi.on("reInit", onSelect);
+  }, [emblaApi, onSelect]);
+
+  if (!slides.length) return null;
 
   return (
-    <section className="max-w-7xl mx-auto px-4 py-10  gap-2 w-full">
-      {/* Banner grande izquierdo: ocupa dos filas */}
-    {banners.map((b) => (
-      <Link
-        key={b.id}
-        href={`/search?family=${encodeURIComponent(b.family)}`}
-        className="col-span-1 lg:col-span-1 row-span-2 block rounded-lg overflow-hidden bg-cover bg-center h-[200px] w-full r"
-        style={{
-          backgroundImage: `url('${b.image}')`,
-            backgroundPosition: "center",
-            backgroundSize: "contain, cover",
-            backgroundRepeat: "no-repeat",
-        }}
-      />
-    ))}
-{/*
-      <Link
-        href={`/search?family=${encodeURIComponent('invierno')}`}
-        className="col-span-2 lg:col-span-1 block rounded-lg overflow-hidden bg-cover bg-center h-[240px] w-[500px]"
-        style={{
-          backgroundImage: "url('/banners/promo-winter.webp')",
-            backgroundPosition: "center",
-            backgroundSize: "cover",
-        }}
-      />
-      <Link
-        href={`/search?family=${encodeURIComponent('Drinkware')}`}
-        className="col-span-2 lg:col-span-1 block rounded-lg overflow-hidden bg-cover bg-center h-[240px] w-[500px] "
-        style={{
-          backgroundImage: "url('/banners/promo-360.jpg')",
-            backgroundPosition: "center",
-            backgroundSize: "cover",
-        }}
-      /> */}
+    <section className="relative max-w-7xl mx-auto px-4 py-6">
+      {/* Viewport */}
+      <div className="overflow-hidden rounded-xl" ref={emblaRef}>
+        {/* Container */}
+        <div className="flex">
+          {slides.map((b, idx) => {
+            const href =
+              b.href ??
+              (b.family ? `/search?family=${encodeURIComponent(b.family)}` : "#");
+            return (
+              <div
+                key={b.id ?? idx}
+                className="min-w-0 flex-[0_0_100%] md:flex-[0_0_100%] pr-0"
+              >
+                <Link
+                  href={href}
+                  aria-label={`Banner ${idx + 1}`}
+                  className="block w-full h-[200px] md:h-[320px] bg-center bg-no-repeat bg-cover"
+                  style={{
+                    backgroundImage: `url('${b.image}')`,
+                    // si preferís que entre completa sin recorte:
+                    // backgroundSize: "contain"
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Controles */}
+      <div className="pointer-events-none absolute inset-y-0 left-0 right-0 flex items-center justify-between px-2">
+        <button
+          type="button"
+          className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition"
+          onClick={scrollPrev}
+          aria-label="Anterior"
+        >
+          ‹
+        </button>
+        <button
+          type="button"
+          className="pointer-events-auto inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/50 text-white hover:bg-black/70 transition"
+          onClick={scrollNext}
+          aria-label="Siguiente"
+        >
+          ›
+        </button>
+      </div>
+
+      {/* Dots */}
+      <div className="mt-3 flex items-center justify-center gap-2">
+        {slides.map((_, i) => (
+          <button
+            key={i}
+            onClick={() => scrollTo(i)}
+            aria-label={`Ir al banner ${i + 1}`}
+            className={`h-2.5 w-2.5 rounded-full transition ${
+              i === selected ? "bg-black" : "bg-gray-300 hover:bg-gray-400"
+            }`}
+          />
+        ))}
+      </div>
     </section>
   );
 }

@@ -15,7 +15,7 @@ export default function ProductCarousel({ productos }) {
     const interval = setInterval(() => {
       scrollAmount = scrollAmount + step > maxScroll ? 0 : scrollAmount + step;
       el.scrollTo({ left: scrollAmount, behavior: 'smooth' });
-    }, 3000);
+    }, 6000);
 
     return () => clearInterval(interval);
   }, []);
