@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
+/* ============ utils ============ */
 const chunk = (arr, n) => {
   const out = [];
   for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
@@ -14,16 +15,14 @@ const slugify = (s = "") =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
-
 const hideFamily = (title = "") => {
   const t = title
-    .toString()
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/\s+/g, " ")
     .trim();
-  const s = slugify(title); // ej: "logo-24", "logo-24hs"
+  const s = slugify(title);
   return (
     t.includes("logo 24") ||
     t.includes("logo 24hs") ||
@@ -34,18 +33,16 @@ const hideFamily = (title = "") => {
     s.startsWith("logo-24")
   );
 };
-
-// 🔧 dedupe por id o slug(title), prioriza el que tenga icon_url/url
 function dedupeFamilies(fams = []) {
   const map = new Map();
   for (const f of fams) {
     if (!f) continue;
     const id = (f.id ?? f._id ?? "").toString().trim();
-    const title = (f.description ?? f.title ?? "").toString().trim();
-    if (hideFamily(title)) continue; // ⬅️ filtrar acá
+    //console.log(f);
+    const title = (f.title ?? f.name ?? "").toString().trim();
+    if (!title || hideFamily(title)) continue;
     const key = id || slugify(title);
     if (!key) continue;
-
     const current = map.get(key);
     const item = {
       id: id || key,
@@ -53,10 +50,8 @@ function dedupeFamilies(fams = []) {
       url: f.url || "",
       icon_url: f.icon_url || f.icon_active_url || f.iconURL || "",
     };
-    if (!current) {
-      map.set(key, item);
-    } else {
-      // completa campos faltantes del que ya está
+    if (!current) map.set(key, item);
+    else {
       if (!current.icon_url && item.icon_url) current.icon_url = item.icon_url;
       if (!current.url && item.url) current.url = item.url;
     }
@@ -66,6 +61,37 @@ function dedupeFamilies(fams = []) {
   );
 }
 
+/* ============ client cache ============ */
+const CACHE_KEY = "bc_families_v1";
+const ETAG_KEY = "bc_families_etag";
+const HINT_COOKIE = "bc_fam_hint=1; Path=/; Max-Age=2592000"; // 30 días
+
+function readCache() {
+  try {
+    const raw = window.localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+function writeCache(payload, etag) {
+  try {
+    window.localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
+    if (etag) window.localStorage.setItem(ETAG_KEY, etag);
+    // cookie indicador (no ponemos el JSON en cookie para no exceder tamaño)
+    document.cookie = HINT_COOKIE;
+  } catch {}
+}
+function readETag() {
+  try {
+    return window.localStorage.getItem(ETAG_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
+/* ============ component ============ */
 export default function CategoriesMenu({ className = "" }) {
   const [open, setOpen] = useState(false);
   const [families, setFamilies] = useState([]);
@@ -75,22 +101,43 @@ export default function CategoriesMenu({ className = "" }) {
   const hoverOpenTimer = useRef(null);
   const hoverCloseTimer = useRef(null);
 
-  const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/$/, "");
-  // si tenés backend externo:
-  const familiesUrl = apiBase
-    ? `${apiBase}/api/store/families`
-    : "/api/store/families";
+  //const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/$/, "");
+  const familiesUrl = "/api/families";
 
+  // 1) Cargar al instante desde cache, si existe
+  useEffect(() => {
+    const cached = readCache();
+    if (cached && Array.isArray(cached)) {
+      setFamilies(dedupeFamilies(cached));
+    }
+    //console.log(cached)
+  }, []);
+
+  // 2) Refrescar en background con If-None-Match
   useEffect(() => {
     const ac = new AbortController();
-    fetch(familiesUrl, { cache: "no-store", signal: ac.signal })
-      .then((r) =>
-        r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))
-      )
-      .then((d) =>
-        setFamilies(dedupeFamilies(Array.isArray(d) ? d : d?.families || []))
-      )
-      .catch(() => setFamilies([]));
+    const headers = { "Cache-Control": "no-cache" };
+    const etag = readETag();
+    if (etag) headers["If-None-Match"] = etag;
+    fetch(familiesUrl, { cache: "no-store", signal: ac.signal, headers })
+      .then(async (r) => {
+        if (r.status === 304) return null; // nada nuevo
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const arr = Array.isArray(data) ? data : data?.families || [];
+        const next = dedupeFamilies(arr);
+        const newTag = r.headers.get("etag") || "";
+        writeCache(arr, newTag);
+        //console.log(arr);
+        return next;
+      })
+      .then((next) => {
+        if (next) setFamilies(next);
+      })
+      .catch(() => {
+        // si no había cache, evitamos menú vacío mostrando fallback simple
+        setFamilies((prev) => (prev && prev.length ? prev : []));
+      });
+
     return () => ac.abort();
   }, [familiesUrl]);
 
@@ -155,14 +202,11 @@ export default function CategoriesMenu({ className = "" }) {
           ref={panelRef}
           role="menu"
           aria-label="Categorías"
-          // 👇 ahora se posiciona exactamente debajo del botón
-          className="absolute left-0 top-full mt-2 z-50 w-[900px] max-w-[95vw] rounded-xl border bg-white shadow-xl min-h-[120px]  text-gray-900"
+          className="absolute left-0 top-full mt-2 z-50 w-[900px] max-w-[95vw] rounded-xl border bg-white shadow-xl min-h-[120px] text-gray-900"
           onMouseEnter={openWithDelay}
           onMouseLeave={closeWithDelay}
         >
-          {/* flechita */}
           <div className="absolute -top-2 left-6 h-4 w-4 rotate-45 bg-white border-l border-t" />
-
           <div className="grid grid-cols-4 divide-x">
             {columns.map((col, ci) => (
               <ul key={ci} className="p-3">
@@ -174,9 +218,12 @@ export default function CategoriesMenu({ className = "" }) {
                       onClick={() => setOpen(false)}
                       prefetch={false}
                     >
-                      <span className="grid h-8 w-8 place-items-center rounded-md border">
-                        {/* iconito de “grid” */}
-                        <svg viewBox="0 0 20 20" className="h-4 w-4" fill="#9A9A9A">
+                      <span className="flex items-center justify-center h-10 w-10 shrink-0">
+                        <svg
+                          viewBox="0 0 20 20"
+                          className="h-6 w-6"
+                          fill="#9A9A9A"
+                        >
                           <path d="M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z" />
                         </svg>
                       </span>
@@ -186,37 +233,36 @@ export default function CategoriesMenu({ className = "" }) {
                 )}
 
                 {(!col || col.length === 0) && ci === 0 && (
-                  <li className="px-2 py-2 text-sm text-gray-500">
-                    No hay categorías disponibles
-                  </li>
+                  <li className="px-2 py-2 text-sm text-gray-500">Cargando…</li>
                 )}
+
                 {col.map((f) => {
                   const toArray = (v) => (Array.isArray(v) ? v : v ? [v] : []);
                   const href = {
                     pathname: "/search",
-                    query: {
-                      family: toArray(f.title), // p.ej ["Escritura","Logo 24hs"]
-                    },
+                    query: { family: toArray(f.title) },
                   };
                   return (
                     <li key={`${f.id}-${f.title}`}>
                       <Link
                         href={href}
-                        className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-gray-50  text-gray-900"
+                        className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-gray-50 text-gray-900"
                         onClick={() => setOpen(false)}
                         prefetch={false}
                       >
-                        <span className="grid h-8 w-8 place-items-center rounded-md border">
+                        <span
+                          className="    flex items-center justify-center h-10 w-10 shrink-0"
+                        >
                           {f.icon_url ? (
                             <img
                               src={f.icon_url}
                               alt=""
-                              className="h-5 w-5 object-contain opacity-80"
+                              className="h-6 w-6 object-contain"
                             />
                           ) : (
                             <svg
                               viewBox="0 0 20 20"
-                              className="h-4 w-4 opacity-70"
+                              className="h-6 w-6"
                             >
                               <circle cx="10" cy="10" r="8" />
                             </svg>

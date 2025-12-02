@@ -1,6 +1,7 @@
+// pages/search.js
 import Head from "next/head";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/router";
 import { API_BASE } from "@/lib/api";
 import NavBar from "@/components/NavBar";
@@ -9,7 +10,7 @@ import ProductGrid from "@/components/ProductGrid";
 import Footer from "@/components/Footer";
 import FilterSidebar from "@/components/FilterSidebar";
 
-// Facetas a partir de los productos ya cargados
+/* ================= Facetas a partir de productos ================= */
 function buildFacets(products) {
   const colors = new Set();
   const materials = new Set();
@@ -38,16 +39,28 @@ function buildFacets(products) {
   };
 }
 
+/* ===================== Página ===================== */
 export default function Buscar({
-  items,
-  total,
-  page,
-  totalPages,
+  ssrOk,
+  ssrError,
+  items: ssrItems,
+  total: ssrTotal,
+  page: ssrPage,
+  totalPages: ssrTotalPages,
   query,
   priceBounds: boundsFromServer,
 }) {
-  const loading = false;
   const router = useRouter();
+
+  // ---------- estado de datos (con fallback si SSR falló) ----------
+  const [items, setItems] = useState(ssrItems || []);
+  const [total, setTotal] = useState(ssrTotal || 0);
+  const [page, setPage] = useState(ssrPage || 1);
+  const [totalPages, setTotalPages] = useState(ssrTotalPages || 1);
+
+  // ---------- loading y error UI ----------
+  const [loading, setLoading] = useState(!ssrOk);
+  const [error, setError] = useState(ssrOk ? null : ssrError || "No se pudieron cargar los productos.");
 
   // ---------- estado de filtros (seed desde query SSR) ----------
   const [sort, setSort] = useState(query.sort || "price_asc"); // default: precio ↑
@@ -70,7 +83,6 @@ export default function Buscar({
   // Subatributos: guardamos objetos { key, value }
   const [selectedSubattrs, setSelectedSubattrs] = useState(() => {
     const arr = Array.isArray(query.sub) ? query.sub : [];
-    // aceptamos formato "colors:Rojo" | "material:Metal" | "size:M"
     return arr
       .map((s) => String(s))
       .map((s) => {
@@ -118,41 +130,79 @@ export default function Buscar({
     if (nextSort) usp.set("sort", nextSort);
     usp.set("page", String(nextPage));
 
+    setLoading(true); // feedback local durante la navegación
     router.push({ pathname: "/search", query: Object.fromEntries(usp) });
   };
 
-  // Sidebar handlers
-  const toggleFamily = (id) => {
-    const next = selectedFamilies.includes(id)
-      ? selectedFamilies.filter((f) => f !== id)
-      : [...selectedFamilies, id];
-    setSelectedFamilies(next);
-    pushWith({ nextFamilies: next });
-  };
-  const toggleSubattr = (key, value) => {
-    const exists = selectedSubattrs.some(
-      (e) => e.key === key && e.value === value
-    );
-    const next = exists
-      ? selectedSubattrs.filter((e) => !(e.key === key && e.value === value))
-      : [...selectedSubattrs, { key, value }];
-    setSelectedSubattrs(next);
-    pushWith({ nextSubattrs: next });
-  };
-  const clearAll = () => {
-    setSelectedFamilies([]);
-    setSelectedSubattrs([]);
-    setPriceMin("");
-    setPriceMax("");
-    setSort("price_asc");
-    pushWith({
-      nextFamilies: [],
-      nextSubattrs: [],
-      nextPriceMin: "",
-      nextPriceMax: "",
-      nextSort: "price_asc",
-    });
-  };
+  // ---------- reintento en cliente si el SSR falló ----------
+  useEffect(() => {
+    if (ssrOk) return;
+
+    const controller = new AbortController();
+    const fetchClient = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const q = new URLSearchParams();
+        if (query.q) q.set("q", query.q);
+        const fam = query.family;
+        if (Array.isArray(fam)) fam.forEach((f) => q.append("family", f));
+        else if (fam) q.set("family", fam);
+        const subQ = query.sub;
+        if (Array.isArray(subQ)) subQ.forEach((s) => q.append("sub", s));
+        else if (subQ) q.set("sub", subQ);
+        if (query.priceFrom !== "") q.set("priceFrom", query.priceFrom);
+        if (query.priceTo !== "") q.set("priceTo", query.priceTo);
+        q.set("sort", query.sort || "price_asc");
+        q.set("page", String(query.page || 1));
+        q.set("limit", "24");
+
+        const res = await fetch(`${API_BASE}/api/store/products?${q.toString()}`, {
+          signal: controller.signal,
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+
+        // Ordenar todo el set y paginar en cliente para mimetizar SSR
+        const priceOf2 = (p) => {
+          const v = Number(p?.salePrice ?? p?.price ?? p?.basePrice);
+          return Number.isFinite(v) ? v : Number.MAX_SAFE_INTEGER;
+        };
+        let allItems = Array.isArray(json.items) ? json.items.slice() : [];
+        const sortParam = query.sort || "price_asc";
+        if (sortParam === "price_desc") allItems.sort((a, b) => priceOf2(b) - priceOf2(a));
+        else if (sortParam === "alpha_asc")
+          allItems.sort((a, b) =>
+            String(a?.name || a?.title || "").localeCompare(
+              String(b?.name || b?.title || ""),
+              "es"
+            )
+          );
+        else allItems.sort((a, b) => priceOf2(a) - priceOf2(b));
+
+        const curPage = Math.max(1, Number(query.page) || 1);
+        const PAGE_SIZE = 24;
+        const totalAll = allItems.length;
+        const totalPagesAll = Math.max(1, Math.ceil(totalAll / PAGE_SIZE));
+        const start = (curPage - 1) * PAGE_SIZE;
+        const slice = allItems.slice(start, start + PAGE_SIZE);
+
+        setItems(slice);
+        setTotal(totalAll);
+        setPage(Math.min(curPage, totalPagesAll));
+        setTotalPages(totalPagesAll);
+      } catch (err) {
+        setError(err.message || "Error al cargar");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchClient();
+    return () => controller.abort();
+  }, [ssrOk, query]);
 
   return (
     <>
@@ -163,7 +213,6 @@ export default function Buscar({
       <NavBar />
 
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
-        {/* Sección de promociones */}
         {/* <section>
           <PromoSection
             banners={[
@@ -193,7 +242,7 @@ export default function Buscar({
             Filtros
           </button>
 
-          {/* Ordenar (tu select) */}
+          {/* Ordenar */}
           <div className="flex items-center">
             <label className="text-sm text-gray-600 mr-2">Ordenar por:</label>
             <select
@@ -201,7 +250,8 @@ export default function Buscar({
               value={sort}
               onChange={(e) => {
                 setSort(e.target.value);
-                pushWith({ nextSort: e.target.value });
+                // resetea a página 1
+                pushWith({ nextSort: e.target.value, nextPage: 1 });
               }}
             >
               <option value="price_asc">Precio: menor a mayor</option>
@@ -211,12 +261,23 @@ export default function Buscar({
           </div>
         </div>
 
-        {/* <ProductGrid items={items} loading={loading} /> */}
+        {/* Mensajes de estado */}
+        {loading && (
+          <div className="py-10 flex items-center justify-center">
+            <span className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-gray-800 mr-3" />
+            <span className="text-gray-700">Cargando resultados…</span>
+          </div>
+        )}
+        {!loading && error && (
+          <div className="my-4 rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-900">
+            {error}
+          </div>
+        )}
 
         {/* Layout con sidebar a la izquierda */}
         <div className="flex gap-6">
           <FilterSidebar
-            className="hidden md:block" // ← sidebar sólo en md+
+            className="hidden md:block"
             families={familiesFromItems.map((f) => ({
               id: f.id,
               title: f.title,
@@ -226,39 +287,49 @@ export default function Buscar({
             selectedSubattrs={selectedSubattrs}
             priceMin={priceMin}
             priceMax={priceMax}
-            // ⬇️ reemplaza tus handlers de precio por:
             onCommitPrice={(minStr, maxStr) => {
               setPriceMin(minStr);
               setPriceMax(maxStr);
-              pushWith({ nextPriceMin: minStr, nextPriceMax: maxStr });
+              pushWith({ nextPriceMin: minStr, nextPriceMax: maxStr, nextPage: 1 });
             }}
-            onToggleFamily={toggleFamily}
-            onToggleSubattr={toggleSubattr}
-            onClearAll={clearAll}
-            // ⬇️ NUEVO: límites para el slicer
+            onToggleFamily={(id) => {
+              const next = selectedFamilies.includes(id)
+                ? selectedFamilies.filter((f) => f !== id)
+                : [...selectedFamilies, id];
+              setSelectedFamilies(next);
+              pushWith({ nextFamilies: next, nextPage: 1 });
+            }}
+            onToggleSubattr={(key, value) => {
+              const exists = selectedSubattrs.some((e) => e.key === key && e.value === value);
+              const next = exists
+                ? selectedSubattrs.filter((e) => !(e.key === key && e.value === value))
+                : [...selectedSubattrs, { key, value }];
+              setSelectedSubattrs(next);
+              pushWith({ nextSubattrs: next, nextPage: 1 });
+            }}
+            onClearAll={() => {
+              setSelectedFamilies([]);
+              setSelectedSubattrs([]);
+              setPriceMin("");
+              setPriceMax("");
+              setSort("price_asc");
+              pushWith({
+                nextFamilies: [],
+                nextSubattrs: [],
+                nextPriceMin: "",
+                nextPriceMax: "",
+                nextSort: "price_asc",
+                nextPage: 1,
+              });
+            }}
             priceBounds={priceBounds}
           />
 
           <div className="flex-1 space-y-4">
-            {/* <div className="flex items-center justify-end">
-              <label className="text-sm text-gray-600 mr-2">Ordenar por:</label>
-              <select
-                className="rounded border px-2 py-1 text-sm"
-                value={sort}
-                onChange={(e) => {
-                  setSort(e.target.value);
-                  pushWith({ nextSort: e.target.value });
-                }}
-              >
-                <option value="price_asc">Precio: menor a mayor</option>
-                <option value="price_desc">Precio: mayor a menor</option>
-                <option value="alpha_asc">Alfabético: A → Z</option>
-              </select>
-            </div> */}
-
             <ProductGrid items={items} loading={loading} />
           </div>
         </div>
+
         {/* Paginación */}
         <div className="mt-6 px-2 md:px-0 overflow-visible">
           <div className="flex items-center gap-2">
@@ -271,7 +342,7 @@ export default function Buscar({
                 className="inline-flex items-center rounded border px-3 py-1.5
                    focus:outline-none focus-visible:outline-none
                    ring-0 focus:ring-2 focus:ring-black"
-                disabled={page <= 1}
+                disabled={page <= 1 || loading}
                 onClick={() => pushWith({ nextPage: page - 1 })}
               >
                 ‹ Anterior
@@ -281,7 +352,7 @@ export default function Buscar({
                 className="inline-flex items-center rounded border px-3 py-1.5
                    focus:outline-none focus-visible:outline-none
                    ring-0 focus:ring-2 focus:ring-black"
-                disabled={page >= totalPages}
+                disabled={page >= totalPages || loading}
                 onClick={() => pushWith({ nextPage: page + 1 })}
               >
                 Siguiente ›
@@ -290,6 +361,7 @@ export default function Buscar({
           </div>
         </div>
       </main>
+
       {/* Drawer de filtros para mobile */}
       {openFilters && (
         <div
@@ -327,11 +399,38 @@ export default function Buscar({
                 onCommitPrice={(minStr, maxStr) => {
                   setPriceMin(minStr);
                   setPriceMax(maxStr);
-                  pushWith({ nextPriceMin: minStr, nextPriceMax: maxStr });
+                  pushWith({ nextPriceMin: minStr, nextPriceMax: maxStr, nextPage: 1 });
                 }}
-                onToggleFamily={toggleFamily}
-                onToggleSubattr={toggleSubattr}
-                onClearAll={clearAll}
+                onToggleFamily={(id) => {
+                  const next = selectedFamilies.includes(id)
+                    ? selectedFamilies.filter((f) => f !== id)
+                    : [...selectedFamilies, id];
+                  setSelectedFamilies(next);
+                  pushWith({ nextFamilies: next, nextPage: 1 });
+                }}
+                onToggleSubattr={(key, value) => {
+                  const exists = selectedSubattrs.some((e) => e.key === key && e.value === value);
+                  const next = exists
+                    ? selectedSubattrs.filter((e) => !(e.key === key && e.value === value))
+                    : [...selectedSubattrs, { key, value }];
+                  setSelectedSubattrs(next);
+                  pushWith({ nextSubattrs: next, nextPage: 1 });
+                }}
+                onClearAll={() => {
+                  setSelectedFamilies([]);
+                  setSelectedSubattrs([]);
+                  setPriceMin("");
+                  setPriceMax("");
+                  setSort("price_asc");
+                  pushWith({
+                    nextFamilies: [],
+                    nextSubattrs: [],
+                    nextPriceMin: "",
+                    nextPriceMax: "",
+                    nextSort: "price_asc",
+                    nextPage: 1,
+                  });
+                }}
                 priceBounds={priceBounds}
               />
             </div>
@@ -353,7 +452,7 @@ export default function Buscar({
   );
 }
 
-// ── helpers para normalizar ───────────────────────────────────────────────
+/* ================= helpers normalizar (front) ================= */
 const _normalize = (s = "") =>
   s
     .toString()
@@ -370,8 +469,8 @@ const _slugify = (s = "") =>
 
 // Ocultar “LOGO 24” y variantes habituales (sirve con título o slug)
 function hideFamily(titleOrSlug = "") {
-  const n = _normalize(titleOrSlug); // ej: "logo 24 hs"
-  const sl = _slugify(titleOrSlug); // ej: "logo-24hs"
+  const n = _normalize(titleOrSlug);
+  const sl = _slugify(titleOrSlug);
   return (
     n.includes("logo 24") ||
     n.includes("logo24") ||
@@ -382,18 +481,7 @@ function hideFamily(titleOrSlug = "") {
   );
 }
 
-// util para aceptar string o array en la query (?family=a&family=b o ?family=a,b)
-const toArray = (v) =>
-  v == null
-    ? []
-    : Array.isArray(v)
-    ? v
-    : String(v)
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-
-// SSR – llama al backend público
+/* ================= SSR con safeFetch (timeout + retries) ================= */
 export async function getServerSideProps(ctx) {
   const {
     q = "",
@@ -407,16 +495,7 @@ export async function getServerSideProps(ctx) {
 
   const PAGE_SIZE = 24;
 
-  // const toArray = (v) =>
-  //   Array.isArray(v)
-  //     ? v
-  //     : v
-  //     ? String(v)
-  //         .split(",")
-  //         .map((s) => s.trim())
-  //         .filter(Boolean)
-  //     : [];
-  // Acepta repetidos (?family=a&family=b) y valores simples con comas en el nombre sin partirlos.
+  // Acepta repetidos (?family=a&family=b) y un único valor con comas sin partirlo.
   const toArray = (v) => {
     if (Array.isArray(v)) return v;
     if (v === undefined || v === null) return [];
@@ -435,7 +514,7 @@ export async function getServerSideProps(ctx) {
     _normalize(s)
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "");
-  const hideFamily = (titleOrSlug = "") => {
+  const hideFamilySSR = (titleOrSlug = "") => {
     const n = _normalize(titleOrSlug);
     const sl = _slugify(titleOrSlug);
     return (
@@ -448,27 +527,30 @@ export async function getServerSideProps(ctx) {
     );
   };
 
-  const famArray = toArray(family).filter((t) => !hideFamily(t));
-  const subArray = toArray(sub).filter((t) => !hideFamily(t));
+  const famArray = toArray(family).filter((t) => !hideFamilySSR(t));
+  const subArray = toArray(sub).filter((t) => !hideFamilySSR(t));
 
-  // --- helper: fetch con try/catch y timeout ---
-  const safeFetch = async (url, ms = 15000) => {
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), ms);
-      const res = await fetch(url, { signal: ctrl.signal });
-      clearTimeout(t);
-      const ok = res.ok;
-      let json = null;
+  // --- safe fetch con timeout + reintentos ---
+  const fetchWithTimeout = async (url, init = {}, opts = {}) => {
+    const { timeout = 18000, retries = 2, retryDelay = 800 } = opts;
+    let lastErr;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const ctl = new AbortController();
+      const id = setTimeout(() => ctl.abort(), timeout);
       try {
-        json = await res.json();
-      } catch {
-        json = null;
+        const res = await fetch(url, { ...init, signal: ctl.signal, cache: "no-store" });
+        clearTimeout(id);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res;
+      } catch (err) {
+        clearTimeout(id);
+        lastErr = err;
+        if (attempt < retries) {
+          await new Promise((r) => setTimeout(r, retryDelay * (attempt + 1)));
+          continue;
+        }
+        throw lastErr;
       }
-      return { ok, json, status: res.status };
-    } catch (err) {
-      console.error("[SSR search] safeFetch error", url, err?.message || err);
-      return { ok: false, json: null, status: 0 };
     }
   };
 
@@ -493,11 +575,16 @@ export async function getServerSideProps(ctx) {
     first.set("limit", String(PAGE_SIZE));
     const firstUrl = `${API_BASE}/api/store/products?${first.toString()}`;
 
-    const r1 = await safeFetch(firstUrl);
-    if (!r1.ok || !r1.json) {
-      console.error("[SSR search] first page failed", r1.status);
+    let r1, d1;
+    try {
+      const res1 = await fetchWithTimeout(firstUrl, {}, { timeout: 18000, retries: 2 });
+      d1 = await res1.json();
+    } catch (e) {
+      // SSR falla pero devolvemos la UI igualmente; el cliente reintentará
       return {
         props: {
+          ssrOk: false,
+          ssrError: e.message || "fetch aborted",
           items: [],
           total: 0,
           page: 1,
@@ -515,7 +602,6 @@ export async function getServerSideProps(ctx) {
       };
     }
 
-    const d1 = r1.json;
     const apiTotalPages = Number.isFinite(+d1.totalPages) ? +d1.totalPages : 1;
 
     // 2) restantes en paralelo
@@ -524,8 +610,12 @@ export async function getServerSideProps(ctx) {
       usp.set("page", String(p));
       usp.set("limit", String(PAGE_SIZE));
       const url = `${API_BASE}/api/store/products?${usp.toString()}`;
-      const r = await safeFetch(url);
-      return r.ok && r.json ? r.json : { items: [] };
+      try {
+        const r = await fetchWithTimeout(url, {}, { timeout: 18000, retries: 2 });
+        return await r.json();
+      } catch {
+        return { items: [] };
+      }
     };
 
     let allItems = Array.isArray(d1.items) ? d1.items.slice() : [];
@@ -574,6 +664,8 @@ export async function getServerSideProps(ctx) {
 
     return {
       props: {
+        ssrOk: true,
+        ssrError: null,
         items,
         total,
         page: Math.min(curPage, totalPages),
@@ -583,9 +675,11 @@ export async function getServerSideProps(ctx) {
       },
     };
   } catch (err) {
-    console.error("[SSR search] fatal", err?.message || err);
+    // error fatal de SSR que no pudimos capturar
     return {
       props: {
+        ssrOk: false,
+        ssrError: err?.message || "SSR error",
         items: [],
         total: 0,
         page: 1,
