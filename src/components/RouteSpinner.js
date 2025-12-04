@@ -1,34 +1,69 @@
 // components/RouteSpinner.js
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/router";
 
 export default function RouteSpinner({ text = "Cargando…" }) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    let timeout; // evita parpadeo en navegaciones ultrarrápidas
+  // refs para no depender de re-renders
+  const delayTimeoutRef = useRef(null);
+  const safetyTimeoutRef = useRef(null);
+  const activeTransitionsRef = useRef(0);
 
+  useEffect(() => {
     const start = (url) => {
-      // ignorar si es la misma url (shallow) o anclas
+      // ignorar navegación a la misma ruta exacta
       if (url === router.asPath) return;
-      timeout = setTimeout(() => setLoading(true), 120);
+
+      // incrementamos el contador de transiciones activas
+      activeTransitionsRef.current += 1;
+
+      // si ya estaba cargando, no hace falta reprogramar nada
+      if (loading) return;
+
+      // delay corto para evitar parpadeo en navegaciones instantáneas
+      clearTimeout(delayTimeoutRef.current);
+      delayTimeoutRef.current = setTimeout(() => {
+        setLoading(true);
+      }, 120);
+
+      // "failsafe": apagar spinner como máximo a los 10 segundos
+      clearTimeout(safetyTimeoutRef.current);
+      safetyTimeoutRef.current = setTimeout(() => {
+        activeTransitionsRef.current = 0;
+        setLoading(false);
+      }, 10000);
     };
+
     const end = () => {
-      clearTimeout(timeout);
-      setLoading(false);
+      // una transición terminó
+      if (activeTransitionsRef.current > 0) {
+        activeTransitionsRef.current -= 1;
+      }
+
+      // si ya no queda ninguna transición pendiente, apagamos el spinner
+      if (activeTransitionsRef.current === 0) {
+        clearTimeout(delayTimeoutRef.current);
+        clearTimeout(safetyTimeoutRef.current);
+        setLoading(false);
+      }
     };
 
     router.events.on("routeChangeStart", start);
     router.events.on("routeChangeComplete", end);
     router.events.on("routeChangeError", end);
+
     return () => {
       router.events.off("routeChangeStart", start);
       router.events.off("routeChangeComplete", end);
       router.events.off("routeChangeError", end);
+      clearTimeout(delayTimeoutRef.current);
+      clearTimeout(safetyTimeoutRef.current);
     };
-  }, [router]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router]); // router es estable, así que el efecto se monta una sola vez
 
   if (!loading) return null;
 
