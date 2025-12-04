@@ -1,13 +1,16 @@
 "use client";
+
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 
 /* ============ utils ============ */
+
 const chunk = (arr, n) => {
   const out = [];
   for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
   return out;
 };
+
 const slugify = (s = "") =>
   s
     .toLowerCase()
@@ -15,6 +18,7 @@ const slugify = (s = "") =>
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/(^-|-$)/g, "");
+
 const hideFamily = (title = "") => {
   const t = title
     .toLowerCase()
@@ -33,40 +37,60 @@ const hideFamily = (title = "") => {
     s.startsWith("logo-24")
   );
 };
+
+/**
+ * Normaliza y deduplica familias.
+ * description = texto PRINCIPAL
+ * title = texto secundario / técnico
+ */
 function dedupeFamilies(fams = []) {
   const map = new Map();
+
   for (const f of fams) {
     if (!f) continue;
+
     const id = (f.id ?? f._id ?? "").toString().trim();
-    //console.log(f);
-    const title = (f.title ?? f.name ?? "").toString().trim();
-    if (!title || hideFamily(title)) continue;
-    const key = id || slugify(title);
+
+    const description = (f.description ?? f.title ?? f.name ?? "")
+      .toString()
+      .trim();
+    if (!description || hideFamily(description)) continue;
+
+    const title = (description ?? f.title).toString().trim();
+
+    const key = id || slugify(description);
     if (!key) continue;
-    const current = map.get(key);
+
     const item = {
       id: id || key,
       title,
+      description,
       url: f.url || "",
       icon_url: f.icon_url || f.icon_active_url || f.iconURL || "",
     };
-    if (!current) map.set(key, item);
-    else {
+
+    const current = map.get(key);
+    if (!current) {
+      map.set(key, item);
+    } else {
       if (!current.icon_url && item.icon_url) current.icon_url = item.icon_url;
       if (!current.url && item.url) current.url = item.url;
     }
   }
+
   return [...map.values()].sort((a, b) =>
-    a.title.localeCompare(b.title, "es", { sensitivity: "base" })
+    a.description.localeCompare(b.description, "es", { sensitivity: "base" })
   );
 }
 
 /* ============ client cache ============ */
+
 const CACHE_KEY = "bc_families_v1";
 const ETAG_KEY = "bc_families_etag";
 const HINT_COOKIE = "bc_fam_hint=1; Path=/; Max-Age=2592000"; // 30 días
 
 function readCache() {
+  if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
@@ -75,15 +99,20 @@ function readCache() {
     return null;
   }
 }
+
 function writeCache(payload, etag) {
+  if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(CACHE_KEY, JSON.stringify(payload));
     if (etag) window.localStorage.setItem(ETAG_KEY, etag);
-    // cookie indicador (no ponemos el JSON en cookie para no exceder tamaño)
     document.cookie = HINT_COOKIE;
-  } catch {}
+  } catch {
+    // ignore
+  }
 }
+
 function readETag() {
+  if (typeof window === "undefined") return "";
   try {
     return window.localStorage.getItem(ETAG_KEY) || "";
   } catch {
@@ -92,6 +121,7 @@ function readETag() {
 }
 
 /* ============ component ============ */
+
 export default function CategoriesMenu({ className = "" }) {
   const [open, setOpen] = useState(false);
   const [families, setFamilies] = useState([]);
@@ -101,40 +131,39 @@ export default function CategoriesMenu({ className = "" }) {
   const hoverOpenTimer = useRef(null);
   const hoverCloseTimer = useRef(null);
 
-  //const apiBase = (process.env.NEXT_PUBLIC_API_BASE || "").replace(/\/$/, "");
-  const familiesUrl = "/api/families";
+  const familiesUrl = "/api/families"; // proxy en Next
 
-  // 1) Cargar al instante desde cache, si existe
+  // 1) Hidratar desde cache
   useEffect(() => {
     const cached = readCache();
     if (cached && Array.isArray(cached)) {
       setFamilies(dedupeFamilies(cached));
     }
-    //console.log(cached)
   }, []);
 
-  // 2) Refrescar en background con If-None-Match
+  // 2) Refrescar en background
   useEffect(() => {
     const ac = new AbortController();
     const headers = { "Cache-Control": "no-cache" };
     const etag = readETag();
     if (etag) headers["If-None-Match"] = etag;
+
     fetch(familiesUrl, { cache: "no-store", signal: ac.signal, headers })
       .then(async (r) => {
-        if (r.status === 304) return null; // nada nuevo
+        if (r.status === 304) return null;
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+        const data = await r.json();
         const arr = Array.isArray(data) ? data : data?.families || [];
         const next = dedupeFamilies(arr);
         const newTag = r.headers.get("etag") || "";
         writeCache(arr, newTag);
-        //console.log(arr);
         return next;
       })
       .then((next) => {
         if (next) setFamilies(next);
       })
       .catch(() => {
-        // si no había cache, evitamos menú vacío mostrando fallback simple
         setFamilies((prev) => (prev && prev.length ? prev : []));
       });
 
@@ -142,11 +171,15 @@ export default function CategoriesMenu({ className = "" }) {
   }, [familiesUrl]);
 
   const columns = useMemo(() => {
-    const list = families || [];
+    if (!families || families.length === 0) {
+      return [[]]; // al menos una columna para el mensaje de carga
+    }
+    const list = families;
     const perCol = Math.max(1, Math.ceil(list.length / 4));
     return chunk(list, perCol);
   }, [families]);
 
+  // cerrar al click afuera / ESC
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => e.key === "Escape" && setOpen(false);
@@ -155,8 +188,9 @@ export default function CategoriesMenu({ className = "" }) {
       if (
         !panelRef.current.contains(e.target) &&
         !btnRef.current?.contains(e.target)
-      )
+      ) {
         setOpen(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     window.addEventListener("mousedown", onClick);
@@ -174,6 +208,8 @@ export default function CategoriesMenu({ className = "" }) {
     clearTimeout(hoverOpenTimer.current);
     hoverCloseTimer.current = setTimeout(() => setOpen(false), 120);
   };
+
+  const toArray = (v) => (Array.isArray(v) ? v : v ? [v] : []);
 
   return (
     <div className={`relative ${className}`}>
@@ -218,7 +254,7 @@ export default function CategoriesMenu({ className = "" }) {
                       onClick={() => setOpen(false)}
                       prefetch={false}
                     >
-                      <span className="flex items-center justify-center h-10 w-10 shrink-0">
+                      <span className="flex items-center justify-center h-10 w-10 shrink-0 rounded-lg border">
                         <svg
                           viewBox="0 0 20 20"
                           className="h-6 w-6"
@@ -227,32 +263,33 @@ export default function CategoriesMenu({ className = "" }) {
                           <path d="M3 3h6v6H3V3zm8 0h6v6h-6V3zM3 11h6v6H3v-6zm8 0h6v6h-6v-6z" />
                         </svg>
                       </span>
-                      <span className=" text-gray-900">Ver todo</span>
+                      <span className="text-gray-900">Ver todo</span>
                     </Link>
                   </li>
                 )}
 
                 {(!col || col.length === 0) && ci === 0 && (
-                  <li className="px-2 py-2 text-sm text-gray-500">Cargando…</li>
+                  <li className="px-2 py-2 text-sm text-gray-500">
+                    Cargando categorías…
+                  </li>
                 )}
 
                 {col.map((f) => {
-                  const toArray = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+                  const label = f.description;
                   const href = {
                     pathname: "/search",
-                    query: { family: toArray(f.title) },
+                    query: { family: toArray(label) },
                   };
+
                   return (
-                    <li key={`${f.id}-${f.title}`}>
+                    <li key={`${f.id}-${slugify(label)}`}>
                       <Link
                         href={href}
                         className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-gray-50 text-gray-900"
                         onClick={() => setOpen(false)}
                         prefetch={false}
                       >
-                        <span
-                          className="    flex items-center justify-center h-10 w-10 shrink-0"
-                        >
+                        <span className="flex items-center justify-center h-10 w-10 shrink-0 rounded-lg border">
                           {f.icon_url ? (
                             <img
                               src={f.icon_url}
@@ -262,13 +299,13 @@ export default function CategoriesMenu({ className = "" }) {
                           ) : (
                             <svg
                               viewBox="0 0 20 20"
-                              className="h-6 w-6"
+                              className="h-6 w-6 opacity-70"
                             >
                               <circle cx="10" cy="10" r="8" />
                             </svg>
                           )}
                         </span>
-                        <span className=" text-gray-900">{f.title}</span>
+                        <span className="text-gray-900">{label}</span>
                       </Link>
                     </li>
                   );
