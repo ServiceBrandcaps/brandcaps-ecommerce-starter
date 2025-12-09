@@ -602,7 +602,12 @@ export async function getServerSideProps(ctx) {
       };
     }
 
-    const apiTotalPages = Number.isFinite(+d1.totalPages) ? +d1.totalPages : 1;
+    const apiTotal = Number.isFinite(+d1.total) ? +d1.total : null;
+    const apiTotalPages = Number.isFinite(+d1.totalPages)
+      ? +d1.totalPages
+      : apiTotal
+          ? Math.max(1, Math.ceil(apiTotal / PAGE_SIZE))
+          : 1;
 
     // 2) restantes en paralelo
     const fetchPage = async (p) => {
@@ -657,7 +662,7 @@ export async function getServerSideProps(ctx) {
 
     // 6) paginar en memoria
     const curPage = Math.max(1, Number(page) || 1);
-    const total = allItems.length;
+    const total = apiTotal ?? allItems.length;
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const start = (curPage - 1) * PAGE_SIZE;
     const items = allItems.slice(start, start + PAGE_SIZE);
