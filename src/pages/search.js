@@ -460,6 +460,7 @@ const _normalize = (s = "") =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -532,7 +533,9 @@ export async function getServerSideProps(ctx) {
       .trim()
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ");
   const _slugify = (s = "") =>
     _normalize(s)
       .replace(/[^a-z0-9]+/g, "-")
