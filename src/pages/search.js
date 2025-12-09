@@ -171,6 +171,7 @@ export default function Buscar({
           return Number.isFinite(v) ? v : Number.MAX_SAFE_INTEGER;
         };
         let allItems = Array.isArray(json.items) ? json.items.slice() : [];
+        if (query.q) allItems = allItems.filter((p) => matchesSearchQuery(p, query.q));
         const sortParam = query.sort || "price_asc";
         if (sortParam === "price_desc") allItems.sort((a, b) => priceOf2(b) - priceOf2(a));
         else if (sortParam === "alpha_asc")
@@ -467,6 +468,28 @@ const _slugify = (s = "") =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
+const matchesSearchQuery = (item, rawQuery = "") => {
+  const normalizedQuery = _normalize(rawQuery);
+  if (!normalizedQuery) return true;
+
+  const haystack = [
+    item?.name,
+    item?.title,
+    item?.description,
+    item?.subtitle,
+    item?.slug,
+    item?.sku,
+    item?.code,
+  ]
+    .concat(Array.isArray(item?.tags) ? item.tags : [])
+    .map((s) => _normalize(s))
+    .filter(Boolean)
+    .join(" ");
+
+  const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+  return tokens.every((t) => haystack.includes(t));
+};
+
 // Ocultar “LOGO 24” y variantes habituales (sirve con título o slug)
 function hideFamily(titleOrSlug = "") {
   const n = _normalize(titleOrSlug);
@@ -631,6 +654,8 @@ export async function getServerSideProps(ctx) {
       for (const pg of pages)
         if (Array.isArray(pg.items)) allItems = allItems.concat(pg.items);
     }
+
+    if (q) allItems = allItems.filter((p) => matchesSearchQuery(p, q));
 
     // 3) filtros de precio locales (defensivos)
     const min = priceFrom === "" ? undefined : Number(priceFrom);
