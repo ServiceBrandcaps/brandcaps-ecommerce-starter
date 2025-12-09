@@ -205,6 +205,16 @@ export default function Buscar({
     return () => controller.abort();
   }, [ssrOk, query]);
 
+  // Sincroniza el estado local con nuevos props SSR (ej. al cambiar de página)
+  useEffect(() => {
+    setItems(ssrItems || []);
+    setTotal(ssrTotal || 0);
+    setPage(ssrPage || 1);
+    setTotalPages(ssrTotalPages || 1);
+    setError(ssrOk ? null : ssrError || "No se pudieron cargar los productos.");
+    setLoading(!ssrOk);
+  }, [ssrItems, ssrTotal, ssrPage, ssrTotalPages, ssrOk, ssrError]);
+
   return (
     <>
       <Head>
@@ -488,7 +498,12 @@ const matchesSearchQuery = (item, rawQuery = "") => {
     .join(" ");
 
   const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
-  return tokens.every((t) => haystack.includes(t));
+  const allMatch = tokens.every((t) => haystack.includes(t));
+  if (allMatch) return true;
+
+  // Fallback: si no matchean todos los tokens, acepta coincidencia parcial con tokens "útiles"
+  const meaningfulTokens = tokens.filter((t) => t.length >= 2);
+  return meaningfulTokens.some((t) => haystack.includes(t));
 };
 
 // Ocultar “LOGO 24” y variantes habituales (sirve con título o slug)
@@ -690,7 +705,8 @@ export async function getServerSideProps(ctx) {
 
     // 6) paginar en memoria
     const curPage = Math.max(1, Number(page) || 1);
-    const total = apiTotal ?? allItems.length;
+    // total se basa en el set filtrado localmente para que coincidan páginas y conteo
+    const total = allItems.length;
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const start = (curPage - 1) * PAGE_SIZE;
     const items = allItems.slice(start, start + PAGE_SIZE);
