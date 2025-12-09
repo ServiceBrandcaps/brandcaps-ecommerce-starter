@@ -171,6 +171,7 @@ export default function Buscar({
           return Number.isFinite(v) ? v : Number.MAX_SAFE_INTEGER;
         };
         let allItems = Array.isArray(json.items) ? json.items.slice() : [];
+        if (query.q) allItems = allItems.filter((p) => matchesSearchQuery(p, query.q));
         const sortParam = query.sort || "price_asc";
         if (sortParam === "price_desc") allItems.sort((a, b) => priceOf2(b) - priceOf2(a));
         else if (sortParam === "alpha_asc")
@@ -203,6 +204,16 @@ export default function Buscar({
     fetchClient();
     return () => controller.abort();
   }, [ssrOk, query]);
+
+  // Sincroniza el estado local con nuevos props SSR (ej. al cambiar de página)
+  useEffect(() => {
+    setItems(ssrItems || []);
+    setTotal(ssrTotal || 0);
+    setPage(ssrPage || 1);
+    setTotalPages(ssrTotalPages || 1);
+    setError(ssrOk ? null : ssrError || "No se pudieron cargar los productos.");
+    setLoading(!ssrOk);
+  }, [ssrItems, ssrTotal, ssrPage, ssrTotalPages, ssrOk, ssrError]);
 
   return (
     <>
@@ -459,6 +470,7 @@ const _normalize = (s = "") =>
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -466,6 +478,33 @@ const _slugify = (s = "") =>
   _normalize(s)
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
+
+const matchesSearchQuery = (item, rawQuery = "") => {
+  const normalizedQuery = _normalize(rawQuery);
+  if (!normalizedQuery) return true;
+
+  const haystack = [
+    item?.name,
+    item?.title,
+    item?.description,
+    item?.subtitle,
+    item?.slug,
+    item?.sku,
+    item?.code,
+  ]
+    .concat(Array.isArray(item?.tags) ? item.tags : [])
+    .map((s) => _normalize(s))
+    .filter(Boolean)
+    .join(" ");
+
+  const tokens = normalizedQuery.split(/\s+/).filter(Boolean);
+  const allMatch = tokens.every((t) => haystack.includes(t));
+  if (allMatch) return true;
+
+  // Fallback: si no matchean todos los tokens, acepta coincidencia parcial con tokens "útiles"
+  const meaningfulTokens = tokens.filter((t) => t.length >= 2);
+  return meaningfulTokens.some((t) => haystack.includes(t));
+};
 
 // Ocultar “LOGO 24” y variantes habituales (sirve con título o slug)
 function hideFamily(titleOrSlug = "") {
@@ -509,7 +548,9 @@ export async function getServerSideProps(ctx) {
       .trim()
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "");
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ");
   const _slugify = (s = "") =>
     _normalize(s)
       .replace(/[^a-z0-9]+/g, "-")
@@ -602,7 +643,12 @@ export async function getServerSideProps(ctx) {
       };
     }
 
-    const apiTotalPages = Number.isFinite(+d1.totalPages) ? +d1.totalPages : 1;
+    const apiTotal = Number.isFinite(+d1.total) ? +d1.total : null;
+    const apiTotalPages = Number.isFinite(+d1.totalPages)
+      ? +d1.totalPages
+      : apiTotal
+          ? Math.max(1, Math.ceil(apiTotal / PAGE_SIZE))
+          : 1;
 
     // 2) restantes en paralelo
     const fetchPage = async (p) => {
@@ -626,6 +672,8 @@ export async function getServerSideProps(ctx) {
       for (const pg of pages)
         if (Array.isArray(pg.items)) allItems = allItems.concat(pg.items);
     }
+
+    if (q) allItems = allItems.filter((p) => matchesSearchQuery(p, q));
 
     // 3) filtros de precio locales (defensivos)
     const min = priceFrom === "" ? undefined : Number(priceFrom);
@@ -657,6 +705,7 @@ export async function getServerSideProps(ctx) {
 
     // 6) paginar en memoria
     const curPage = Math.max(1, Number(page) || 1);
+    // total se basa en el set filtrado localmente para que coincidan páginas y conteo
     const total = allItems.length;
     const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
     const start = (curPage - 1) * PAGE_SIZE;

@@ -31,7 +31,9 @@ export function CartProvider({ children }) {
       try {
         // ajustá la key si usás otra
         localStorage.setItem("cart", JSON.stringify([]));
-      } catch {}
+      } catch (error) {
+        console.error("No se pudo limpiar el carrito en localStorage", error);
+      }
     }
   };
 
